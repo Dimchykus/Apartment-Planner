@@ -245,10 +245,66 @@ function ShoeCabinet({ color }: P) {
     {[0.55, 0.65].map((y) => <B key={y} p={[0.38, y, 0.17]} s={[0.012, 0.08, 0.02]} c={METAL} metal={0.9} rough={0.3} />)}
   </>)
 }
-function Desk({ color }: P) {
+function Desk({ color, style }: P & { style?: string }) {
+  const monitor = (x: number, a: number) => (
+    <group key={x} position={[x, 0.76, -0.17]} rotation={[0, a, 0]}>
+      <B p={[0, 0.008, 0.02]} s={[0.2, 0.015, 0.15]} c="#222429" r={0.005} metal={0.4} rough={0.4} />
+      <B p={[0, 0.14, 0]} s={[0.04, 0.28, 0.03]} c="#222429" r={0.008} metal={0.4} rough={0.4} />
+      <B p={[0, 0.28, 0.018]} s={[0.56, 0.33, 0.022]} c="#181a1f" r={0.007} rough={0.35} />
+      <B p={[0, 0.28, 0.031]} s={[0.53, 0.3, 0.004]} c="#1e293b" r={0.002} rough={0.12} metal={0.15} />
+    </group>
+  )
   return (<>
     <B p={[0, 0.74, 0]} s={[1.4, 0.04, 0.65]} c={color} r={0.01} />
     {[[-0.65, -0.28], [0.65, -0.28], [-0.65, 0.28], [0.65, 0.28]].map(([x, z], i) => <B key={i} p={[x, 0.36, z]} s={[0.04, 0.72, 0.04]} c="#333" />)}
+    {style !== 'plain' && (<>
+      {/* two workstation monitors */}
+      {monitor(-0.3, 0.14)}
+      {monitor(0.3, -0.14)}
+      {/* keyboard + mouse + desk pad */}
+      <B p={[-0.04, 0.763, 0.12]} s={[0.78, 0.004, 0.3]} c="#2a2d34" r={0.002} rough={0.95} />
+      <B p={[-0.08, 0.775, 0.13]} s={[0.42, 0.018, 0.13]} c="#1f2126" r={0.005} rough={0.5} />
+      <B p={[0.24, 0.775, 0.13]} s={[0.06, 0.026, 0.1]} c="#1f2126" r={0.018} rough={0.4} />
+      {/* PC tower under the right side of the desk */}
+      <group position={[0.46, 0.24, -0.02]}>
+        <B p={[0, 0, 0]} s={[0.21, 0.48, 0.44]} c="#1c1e24" r={0.01} metal={0.35} rough={0.4} />
+        <B p={[0, 0.14, 0.222]} s={[0.17, 0.012, 0.006]} c="#3b82f6" r={0.002} />
+        <B p={[0, -0.06, 0.222]} s={[0.15, 0.22, 0.006]} c="#272a32" r={0.004} />
+      </group>
+    </>)}
+  </>)
+}
+
+/** UREVO Foldi 3S foldable smart treadmill (65 × 131 × 120 cm unfolded, 17 cm folded). Front motor hood is at -z. */
+function Treadmill({ color, style }: P & { style?: string }) {
+  const folded = style === 'folded'
+  return (<>
+    {/* main deck frame */}
+    <B p={[0, 0.065, 0]} s={[0.65, 0.09, 1.31]} c={color} r={0.02} rough={0.45} metal={0.25} />
+    {/* running belt (42 × 108 cm) */}
+    <B p={[0, 0.112, 0.07]} s={[0.44, 0.014, 1.06]} c="#141518" r={0.004} rough={0.92} />
+    {/* side foot rails */}
+    {[-0.275, 0.275].map((x) => <B key={x} p={[x, 0.114, 0.07]} s={[0.08, 0.016, 1.06]} c="#343840" r={0.005} rough={0.6} />)}
+    {/* front motor hood + LED display strip */}
+    <B p={[0, 0.115, -0.54]} s={[0.62, 0.08, 0.22]} c={color} r={0.025} rough={0.35} metal={0.2} />
+    <B p={[0, 0.156, -0.53]} s={[0.26, 0.006, 0.07]} c="#0d1117" r={0.003} rough={0.15} />
+    <Glow p={[0, 0.16, -0.53]} s={[0.16, 0.003, 0.022]} c="#38bdf8" i={1.2} />
+    {/* rubber feet */}
+    {[[-0.27, -0.58], [0.27, -0.58], [-0.27, 0.58], [0.27, 0.58]].map(([x, z], i) => <B key={i} p={[x, 0.012, z]} s={[0.06, 0.024, 0.06]} c="#111" />)}
+    {!folded && (<>
+      {/* folding upright posts */}
+      {[-0.29, 0.29].map((x) => (
+        <group key={x} position={[x, 0.62, -0.46]} rotation={[0.14, 0, 0]}>
+          <B p={[0, 0, 0]} s={[0.042, 1.02, 0.05]} c={color} r={0.012} metal={0.4} rough={0.35} />
+        </group>
+      ))}
+      {/* top handrail + integrated workstation / tablet bar */}
+      <B p={[0, 1.12, -0.37]} s={[0.64, 0.045, 0.16]} c={color} r={0.015} rough={0.4} />
+      <B p={[0, 1.148, -0.36]} s={[0.32, 0.01, 0.09]} c="#111419" r={0.004} rough={0.2} />
+      <Glow p={[0, 1.155, -0.36]} s={[0.14, 0.004, 0.025]} c="#e2e8f0" i={1.0} />
+      {/* side armrests */}
+      {[-0.29, 0.29].map((x) => <B key={'a' + x} p={[x, 1.08, -0.25]} s={[0.045, 0.04, 0.26]} c="#2f333a" r={0.015} rough={0.6} />)}
+    </>)}
   </>)
 }
 
@@ -480,9 +536,10 @@ export function Model({ type, color, w, low, style }: { type: FType; color: stri
     case 'bookcase': return <Bookcase color={color} />
     case 'dresser': return <Dresser color={color} />
     case 'shoeCabinet': return <ShoeCabinet color={color} />
-    case 'desk': return <Desk color={color} />
+    case 'desk': return <Desk color={color} style={style} />
     case 'cornerDesk': return <CornerDesk color={color} style={style} />
     case 'gamingDesk': return <GamingDesk color={color} />
+    case 'treadmill': return <Treadmill color={color} style={style} />
     case 'floorLamp': return <FloorLamp color={color} style={style} />
     case 'plant': return <Plant color={color} />
     case 'rug': return <Rug color={color} style={style} />

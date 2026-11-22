@@ -2,7 +2,7 @@ export type FType =
   | 'sofa' | 'lSofa' | 'armchair' | 'ottoman' | 'coffeeTable' | 'diningTable' | 'chair' | 'officeChair' | 'gamingChair'
   | 'bed' | 'nightstand' | 'shower' | 'shelf' | 'tv' | 'mirror' | 'ac'
   | 'bookcase' | 'dresser' | 'shoeCabinet' | 'wardrobe' | 'tvUnit' | 'kitchen' | 'kitchenIsland' | 'fridge'
-  | 'bathtub' | 'wc' | 'vanity' | 'washer' | 'desk' | 'cornerDesk' | 'gamingDesk' | 'floorLamp' | 'plant' | 'rug'
+  | 'bathtub' | 'wc' | 'vanity' | 'washer' | 'desk' | 'cornerDesk' | 'gamingDesk' | 'treadmill' | 'floorLamp' | 'plant' | 'rug'
 
 /** w / d override the catalog size (metres); the model is stretched to fit. */
 export type Finish = 'matte' | 'satin' | 'gloss'
@@ -38,9 +38,10 @@ export const CATALOG: Record<FType, { label: string; w: number; d: number; h: nu
   wc: { label: 'WC', w: 0.4, d: 0.7, h: 0.8, color: '#f6f6f4' },
   vanity: { label: 'Vanity + sink', w: 0.8, d: 0.5, h: 0.85, color: '#d9d3c8' },
   washer: { label: 'Washer', w: 0.6, d: 0.6, h: 0.85, color: '#eceff1' },
-  desk: { label: 'Desk', w: 1.4, d: 0.65, h: 0.75, color: '#c9b79c' },
+  desk: { label: 'Working desk (PC + 2 monitors)', w: 1.4, d: 0.65, h: 1.15, color: '#c9b79c' },
   cornerDesk: { label: 'L-shape corner desk', w: 1.6, d: 1.4, h: 0.75, color: '#b89f80' },
   gamingDesk: { label: 'Gaming setup (desk, 2 monitors, PC)', w: 1.6, d: 0.75, h: 1.12, color: '#26272c' },
+  treadmill: { label: 'UREVO Foldi 3S', w: 0.65, d: 1.31, h: 1.2, color: '#23252a' },
   floorLamp: { label: 'Floor lamp', w: 0.4, d: 0.4, h: 1.7, color: '#f0e2c8' },
   plant: { label: 'Potted plant', w: 0.45, d: 0.45, h: 1.35, color: '#4c7c48' },
   rug: { label: 'Rug / carpet', w: 2.0, d: 1.4, h: 0.02, color: '#cfc7ba' },
@@ -76,9 +77,10 @@ export const PRESETS: Partial<Record<FType, Preset[]>> = {
   wc: [P('Compact', 0.36, 0.6), P('Standard', 0.4, 0.7)],
   vanity: [P('50 cm', 0.5, 0.5), P('60 cm', 0.6, 0.5), P('80 cm', 0.8, 0.5), P('100 cm', 1.0, 0.5)],
   washer: [P('Slim', 0.6, 0.45), P('Standard', 0.6, 0.6)],
-  desk: [P('100 cm', 1.0, 0.6), P('140 cm', 1.4, 0.65), P('160 cm', 1.6, 0.75)],
+  desk: [P('120 cm', 1.2, 0.6, 1.15), P('140 cm', 1.4, 0.65, 1.15), P('160 cm', 1.6, 0.75, 1.15)],
   cornerDesk: [P('Compact', 1.4, 1.2), P('Standard', 1.6, 1.4), P('Large', 1.8, 1.5)],
   gamingDesk: [P('120 cm (1 monitor fits)', 1.2, 0.7), P('140 cm', 1.4, 0.75), P('160 cm', 1.6, 0.75), P('180 cm', 1.8, 0.8)],
+  treadmill: [P('Unfolded (65×131×120)', 0.65, 1.31, 1.2), P('Folded (65×131×17)', 0.65, 1.31, 0.17)],
   tv: [P('32″', 0.75, 0.06, 0.45), P('43″', 0.95, 0.06, 0.56), P('55″', 1.25, 0.06, 0.72), P('65″', 1.45, 0.06, 0.84)],
   mirror: [P('Bathroom 60×90', 0.6, 0.05, 0.9), P('Full length 70×140', 0.7, 0.05, 1.4), P('Wide 100×80', 1.0, 0.05, 0.8)],
   ac: [P('Standard 90 cm', 0.9, 0.22, 0.3), P('Wide 110 cm', 1.1, 0.24, 0.32)],
@@ -100,7 +102,9 @@ export const STYLES: Partial<Record<FType, { id: string; label: string }[]>> = {
   chair: [{ id: 'standard', label: 'Chair' }, { id: 'stool', label: 'Bar stool' }],
   bed: [{ id: 'soft', label: 'Upholstered headboard' }, { id: 'wood', label: 'Wooden headboard' }, { id: 'platform', label: 'Low platform' }],
   wardrobe: [{ id: 'hinged', label: 'Hinged doors' }, { id: 'sliding', label: 'Sliding doors' }],
+  desk: [{ id: 'workstation', label: 'PC + 2 monitors' }, { id: 'plain', label: 'Empty desk' }],
   cornerDesk: [{ id: 'right', label: 'Return on right' }, { id: 'left', label: 'Return on left' }],
+  treadmill: [{ id: 'unfolded', label: 'Unfolded (handrail up)' }, { id: 'folded', label: 'Folded flat' }],
   floorLamp: [{ id: 'classic', label: 'Standing shade' }, { id: 'arc', label: 'Arc lamp' }],
   mirror: [{ id: 'rect', label: 'Rectangular' }, { id: 'round', label: 'Round' }],
   rug: [{ id: 'rect', label: 'Rectangular' }, { id: 'round', label: 'Round' }],
