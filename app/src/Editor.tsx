@@ -311,6 +311,7 @@ export function WallHandles() {
   const handleIds = [...Object.keys(editable), ...customIds]
   const grab = (id: string, px: number, py: number) => (e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation()
+    useStore.getState().selectOpening(null)
     useStore.getState().select(id)
     useStore.getState().setDrag({ kind: 'node', id, dx: m(px) - e.point.x, dz: m(py) - e.point.z })
   }
@@ -591,8 +592,11 @@ export function Keys() {
         if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); s.redo(); return }
       }
       if (s.mode === 'walls') {
-        if (e.key === 'Escape') s.drawStart ? s.setDrawStart(null) : s.setTool('move')
-        else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selected?.[0] === 'c') s.removeWall(s.selected.slice(0, -1))
+        if (e.key === 'Escape') { if (s.selOpening) s.selectOpening(null); else if (s.drawStart) s.setDrawStart(null); else s.setTool('move') }
+        else if (!typing && (e.key === 'Delete' || e.key === 'Backspace')) {
+          if (s.selOpening) s.removeOpening(s.selOpening.wall, s.selOpening.i)
+          else if (s.selected?.[0] === 'c') s.removeWall(s.selected.slice(0, -1))
+        }
         return
       }
       if (s.mode === 'openings' && !typing && (e.key === 'Delete' || e.key === 'Backspace') && s.selOpening) {

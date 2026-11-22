@@ -90,9 +90,11 @@ export function Openings() {
   const doorState = useStore((s) => s.doorState)
   const mode = useStore((s) => s.mode)
   const tool = useStore((s) => s.openingTool)
+  const wallTool = useStore((s) => s.tool)
   const sel = useStore((s) => s.selOpening)
   const fancy = useUI((s) => s.quality) === 'high'
-  const editing = mode === 'openings'
+  const editing = mode === 'openings' || (mode === 'walls' && wallTool === 'move')
+  const canSelect = mode === 'openings' ? tool === 'select' : mode === 'walls' && wallTool === 'move'
 
   return (
     <group>
@@ -117,7 +119,7 @@ export function Openings() {
                 : <DoorMesh w={width} top={o.top} thick={thick} state={state} hinge={hinge} swing={swing} glass={o.glass} keyId={key} fancy={fancy} interactive={mode === 'view'} />}
               {editing && (
                 <>
-                  <mesh position={[0, (o.sill + o.top) / 2, 0]} onPointerDown={tool === 'select' ? (e) => { e.stopPropagation(); useStore.getState().selectOpening({ wall: w.id, i }) } : undefined}>
+                  <mesh position={[0, (o.sill + o.top) / 2, 0]} onPointerDown={canSelect ? (e) => { e.stopPropagation(); useStore.getState().select(null); useStore.getState().selectOpening({ wall: w.id, i }) } : undefined}>
                     <boxGeometry args={[width, o.top - o.sill, thick + 0.12]} />
                     <meshBasicMaterial color={isSel ? '#ff8a00' : '#1e90ff'} transparent opacity={isSel ? 0.28 : 0.1} depthWrite={false} />
                   </mesh>

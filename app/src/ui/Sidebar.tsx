@@ -9,7 +9,7 @@ import { roomSize } from '../Dims'
 import { kindInfo } from '../roomkinds'
 import { misplaced } from '../autofurnish'
 import { CriteriaPanel, SpaceSummary, RoomsPanel, FurnPanel } from './Panels'
-import { StylePanel, OpeningsPanel, DoorLightControls } from './StylePanels'
+import { StylePanel, OpeningsPanel, DoorLightControls, SelectedOpeningCard, OpeningsList } from './StylePanels'
 import { AiPanel } from './AiPanel'
 import { DimsPanel } from './DimsPanel'
 import { useAI } from '../ai/aiStore'
@@ -133,7 +133,9 @@ function ModePanel() {
         <button className="btn danger" onClick={() => s.removeWall(selWall.id)}><Icon n="trash" size={15} /> Delete wall</button>
       </div>
     )}
-    {tip('Outer walls are locked. Drag the blue handles; purple square moves a whole added wall.')}
+    {tip('Outer walls are locked. Drag blue handles, or click any window / door to edit or remove it.')}
+    <SelectedOpeningCard />
+    <OpeningsList />
     <button className="btn" onClick={s.resetWalls}>Reset walls</button>
   </>)
   // furniture
