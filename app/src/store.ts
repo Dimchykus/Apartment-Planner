@@ -500,6 +500,11 @@ useStore.subscribe((s, prev) => {
   saveTimer = setTimeout(flushSave, 400)
 })
 if (typeof addEventListener === 'function') addEventListener('pagehide', () => { if (saveTimer) flushSave() })
+// Prevent Vite HMR from creating duplicate Zustand store instances (which breaks Ctrl+Z and splits UI state)
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => { if (saveTimer) flushSave() })
+  import.meta.hot.accept(() => { location.reload() })
+}
 
 export function shareLink() {
   const { flatId, nodes, furniture, customWalls, roomKinds, hintOv, criteria, openings, doorState, roomStyle, lightOv } = get()

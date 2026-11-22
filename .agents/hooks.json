@@ -1,0 +1,12 @@
+{
+  "run-tests-after-prompt": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node run-tests-hook.mjs",
+        "timeout": 30
+      }
+    ]
+  }
+}
