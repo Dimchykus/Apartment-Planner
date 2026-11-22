@@ -1,6 +1,6 @@
 // Everything the UI does with the user's flats: save, rename, duplicate, delete, export, import.
 import { FLATS, BUILTIN_IDS } from '../flats'
-import { useStore, forgetFlatSave } from '../store'
+import { useStore, forgetFlatSave, getFlatSave, putFlatSave } from '../store'
 import { useUI } from '../ui/uiStore'
 import { buildFlat, newFlatId, readUserFlats, writeUserFlats, traceFromDef, exportFlatJson, parseFlatJson, type UserFlat } from './library'
 
@@ -17,7 +17,7 @@ function download(name: string, text: string, type = 'application/json') {
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'flat'
 
 /** Build + store + register a user flat. Returns an error text, or null on success. */
-export function saveUserFlat(rec: UserFlat, opts: { switchTo?: boolean } = {}): string | null {
+export function saveUserFlat(rec: UserFlat, opts: { switchTo?: boolean; keepLayout?: boolean } = {}): string | null {
   const built = buildFlat(rec)
   if ('error' in built) return built.error
   const list = readUserFlats()
@@ -28,7 +28,7 @@ export function saveUserFlat(rec: UserFlat, opts: { switchTo?: boolean } = {}): 
   if (err) return err
   const j = FLATS.findIndex((f) => f.id === rec.id)
   if (j >= 0) FLATS[j] = built.def; else FLATS.push(built.def)
-  forgetFlatSave(rec.id) // geometry may have changed: start from a fresh layout
+  if (!opts.keepLayout) forgetFlatSave(rec.id) // geometry may have changed: start from a fresh layout
   useUI.getState().bumpFlats()
   if (opts.switchTo) useStore.getState().switchFlat(rec.id)
   return null
@@ -37,7 +37,7 @@ export function saveUserFlat(rec: UserFlat, opts: { switchTo?: boolean } = {}): 
 export function renameUserFlat(id: string, name: string) {
   const rec = getUserFlat(id)
   if (!rec || !name.trim()) return
-  const err = saveUserFlat({ ...rec, name: name.trim() })
+  const err = saveUserFlat({ ...rec, name: name.trim() }, { keepLayout: true }) // a new name does not change the geometry
   if (err) useUI.getState().showToast(err)
   else if (useStore.getState().flatId === id) { /* the name is shown from FLATS; the layout keeps as is */ }
 }
@@ -52,15 +52,30 @@ export function deleteUserFlat(id: string) {
   useUI.getState().bumpFlats()
 }
 
-/** Copy any flat (built-in or yours) into "My flats" so it can be edited. */
+/** Copy any flat (built-in or yours) into "My flats" so it can be edited. The copy is exact: geometry, doors / windows, furniture, layouts, room functions, styles. */
 export function duplicateFlat(id: string): string | null {
   const src = FLATS.find((f) => f.id === id)
   if (!src) return null
+  const sv = getFlatSave(id) // what was changed after the flat was made (the live flat is saved on every change)
   const mine = getUserFlat(id)
+  const newId = newFlatId()
   const rec: UserFlat = mine
-    ? { ...mine, id: newFlatId(), name: mine.name + ' (copy)', created: Date.now() }
-    : { id: newFlatId(), name: src.name.replace(/ · .*$/, '') + ' (copy)', created: Date.now(), updated: Date.now(), image: src.image, imgW: src.imgW, imgH: src.imgH, trace: traceFromDef(src) }
-  const err = saveUserFlat(rec, { switchTo: true })
+    ? { ...structuredClone(mine), id: newId, name: mine.name + ' (copy)', created: Date.now() }
+    : { id: newId, name: src.name.replace(/ · .*$/, '') + ' (copy)', created: Date.now(), updated: Date.now(), image: src.image, imgW: src.imgW, imgH: src.imgH, trace: traceFromDef(src, sv) }
+  if (sv) {
+    if (mine) putFlatSave(newId, sv) // same trace -> same corner / wall / room ids: the saved state fits as it is
+    else {
+      // built-in source: its edits are baked into the new trace (ids are renumbered), so only what does not depend on ids is carried over
+      const room = (oldId: string) => { const i = src.rooms.findIndex((r) => r.id === oldId); return i >= 0 ? 'r' + (i + 1) : null }
+      const remap = <T,>(o?: Record<string, T>) => Object.fromEntries(Object.entries(o ?? {}).flatMap(([k, v]) => { const n = room(k); return n ? [[n, v]] : [] }))
+      putFlatSave(newId, {
+        furniture: sv.furniture, versions: sv.versions, activeVer: sv.activeVer, hintOv: sv.hintOv, criteria: sv.criteria, stage: sv.stage ?? 'design',
+        roomKinds: remap(sv.roomKinds), roomStyle: remap(sv.roomStyle),
+        lightOv: Object.fromEntries(Object.entries(sv.lightOv ?? {}).flatMap(([k, v]) => { const [r, g] = k.split(':'); const n = room(r); return n ? [[n + ':' + g, v]] : [] })),
+      })
+    }
+  }
+  const err = saveUserFlat(rec, { switchTo: true, keepLayout: !!sv })
   if (err) { useUI.getState().showToast(err); return null }
   return rec.id
 }

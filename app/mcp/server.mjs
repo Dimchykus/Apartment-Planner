@@ -42,7 +42,11 @@ const where = {
   gap: z.number().optional().describe('With against_wall: gap to the wall (default 0.03)'),
 }
 
-tool(server, 'get_flat', 'Rooms (id, kind, area, bounds, polygon), doors and windows with positions, and the list of furniture types with default sizes. Call this first. ' + units, {})
+tool(server, 'get_flat', 'Rooms (id, kind, area, stated_m2 from the plan, wall_ids, bounds, polygon), doors and windows with positions, and the list of furniture types with default sizes. Call this first. ' + units, {})
+tool(server, 'get_walls', 'All wall corners (id, position, whether it can move) and walls (id, length, thickness, direction, which rooms they bound, can_move). Outer walls are locked; only inner walls move. Use before changing walls.', {})
+tool(server, 'shift_wall', 'Move a wall sideways by dx / dz metres (both ends; locked outer corners stay, sliding corners stay on their outer wall). Returns what actually moved, the new area of every room and how many furniture items now have a problem. ' + units, { id: z.string(), dx: z.number().optional().describe('+ = east'), dz: z.number().optional().describe('+ = south') })
+tool(server, 'move_node', 'Move one wall corner to x / z (metres). Respects the app limits (outer corners locked, sliding corners stay on their wall).', { id: z.string(), x: z.number(), z: z.number() })
+tool(server, 'resize_room_to_area', 'Move one wall of a room so the room gets the wanted net floor area (wall thickness taken off). The neighbour behind that wall shrinks or grows. Returns before / after areas of all rooms. Pick a wall with can_move from get_walls; get_flat lists each room wall_ids.', { room: z.string(), wall: z.string(), area_m2: z.number() })
 tool(server, 'list_furniture', 'All furniture in the open layout: id, type, position, rotation, size, room, and "problem" when it does not fit (wall / door / other item in the way). ' + units, {})
 tool(server, 'add_furniture', 'Add an item (types are listed by get_flat; "gamingDesk" brings its chair). Position with x/z, or room (+ against_wall). ' + units, { type: z.string(), ...where, ...look })
 tool(server, 'move_furniture', 'Move and/or rotate an item (its group, such as a chair at a table, follows). ' + units, { id: z.string(), ...where })

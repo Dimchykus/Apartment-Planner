@@ -75,6 +75,22 @@ try {
   const openingsCountUndo = await b.eval("document.querySelectorAll('.side.tools .flats .flat').length")
   assert.equal(openingsCountUndo, openingsCount0, 'Real Ctrl+Z should restore removed window')
 
+  // 4. Ukrainian keyboard layout (key='я', code='KeyZ') + focused range slider
+  await b.eval("[...document.querySelectorAll('.mbtn')].find(e => e.textContent.includes('Furniture')).click()")
+  await b.sleep(200)
+  const fId = await b.eval('window.__planner.store.getState().furniture[0].id')
+  await b.eval(`window.__planner.store.getState().select(${JSON.stringify(fId)})`)
+  await b.sleep(200)
+  await b.eval("document.querySelector('.side.tools input[type=\"range\"]')?.focus()")
+  const rot0 = await b.eval('window.__planner.store.getState().furniture[0].rot')
+  await b.eval(`window.__planner.store.getState().patchFurn(${JSON.stringify(fId)}, { rot: ${rot0} + Math.PI / 2 })`)
+  await b.sleep(150)
+  await b.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', modifiers: 2, windowsVirtualKeyCode: 90, key: 'я', code: 'KeyZ' })
+  await b.send('Input.dispatchKeyEvent', { type: 'keyUp', modifiers: 2, windowsVirtualKeyCode: 90, key: 'я', code: 'KeyZ' })
+  await b.sleep(200)
+  const rotUndo = await b.eval('window.__planner.store.getState().furniture[0].rot')
+  assert.ok(Math.abs(rotUndo - rot0) < 1e-4, 'Ctrl+Z on Ukrainian layout with focused slider should undo rotate')
+
   const errs = b.logs.filter((l) => l.startsWith('EXCEPTION:') || l.startsWith('error:'))
   assert.equal(errs.length, 0, 'Should have no console errors: ' + errs.join(' | '))
   console.log('E2E Ctrl+Z & regression tests PASSED!')

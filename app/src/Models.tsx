@@ -51,8 +51,8 @@ function Armchair({ color }: P) {
 }
 function CoffeeTable({ color, style }: P & { style?: string }) {
   if (style === 'round') return (<>
-    <mesh position={[0, 0.38, 0]} castShadow receiveShadow><cylinderGeometry args={[0.5, 0.5, 0.04, 40]} /><meshStandardMaterial color={color} roughness={0.4} /></mesh>
-    <mesh position={[0, 0.18, 0]} castShadow><cylinderGeometry args={[0.06, 0.09, 0.36, 20]} /><meshStandardMaterial color="#222" roughness={0.5} /></mesh>
+    <mesh position={[0, 0.38, 0]} scale={[0.5, 1, 0.3]} castShadow receiveShadow><cylinderGeometry args={[1, 1, 0.04, 48]} /><meshStandardMaterial color={color} roughness={0.4} /></mesh>
+    <mesh position={[0, 0.18, 0]} scale={[0.075, 1, 0.045]} castShadow><cylinderGeometry args={[1, 1, 0.36, 20]} /><meshStandardMaterial color="#222" roughness={0.5} /></mesh>
   </>)
   return (<>
     <B p={[0, 0.38, 0]} s={[1.0, 0.04, 0.6]} c={color} r={0.015} rough={0.4} />
@@ -63,9 +63,10 @@ function CoffeeTable({ color, style }: P & { style?: string }) {
 
 function DiningTable({ color, style }: P & { style?: string }) {
   if (style === 'round') return (<>
-    <mesh position={[0, 0.74, 0]} castShadow receiveShadow><cylinderGeometry args={[0.7, 0.7, 0.04, 48]} /><meshStandardMaterial color={color} roughness={0.45} /></mesh>
-    <mesh position={[0, 0.37, 0]} castShadow><cylinderGeometry args={[0.07, 0.07, 0.72, 20]} /><meshStandardMaterial color="#2b2b2d" metalness={0.5} roughness={0.4} /></mesh>
-    <mesh position={[0, 0.02, 0]} castShadow><cylinderGeometry args={[0.28, 0.3, 0.04, 32]} /><meshStandardMaterial color="#2b2b2d" metalness={0.5} roughness={0.4} /></mesh>
+    {/* drawn as an ellipse of the default 140×80 footprint, so the size stretch turns it into a true circle when width = depth */}
+    <mesh position={[0, 0.74, 0]} scale={[0.7, 1, 0.4]} castShadow receiveShadow><cylinderGeometry args={[1, 1, 0.04, 64]} /><meshStandardMaterial color={color} roughness={0.45} /></mesh>
+    <mesh position={[0, 0.37, 0]} scale={[0.07, 1, 0.04]} castShadow><cylinderGeometry args={[1, 1, 0.72, 24]} /><meshStandardMaterial color="#2b2b2d" metalness={0.5} roughness={0.4} /></mesh>
+    <mesh position={[0, 0.02, 0]} scale={[0.29, 1, 0.166]} castShadow><cylinderGeometry args={[1, 1, 0.04, 36]} /><meshStandardMaterial color="#2b2b2d" metalness={0.5} roughness={0.4} /></mesh>
   </>)
   return (<>
     <B p={[0, 0.74, 0]} s={[1.4, 0.04, 0.8]} c={color} r={0.015} rough={0.45} />
@@ -217,8 +218,18 @@ function Tv({ color }: P) {
     <B p={[0, 0.35, 0.021]} s={[1.17, 0.67, 0.004]} c="#05070a" r={0.004} rough={0.08} metal={0.2} />
   </>)
 }
-function Bookcase({ color }: P) {
+function Bookcase({ color, style }: P & { style?: string }) {
   const bk = ['#b5584a', '#3f6f8f', '#d9b44a', '#5c7f5a', '#8a6a9a', '#d8d2c6']
+  // open rack: four corner posts and shelf boards, no back and no sides: everything can be reached from any side
+  if (style === 'open') return (<>
+    {[[-0.38, -0.135], [0.38, -0.135], [-0.38, 0.135], [0.38, 0.135]].map(([x, z], i) => <B key={i} p={[x, 1.0, z]} s={[0.08, 2.0, 0.03]} c={METAL} r={0.004} metal={0.7} rough={0.35} />)}
+    {[0.02, 0.45, 0.85, 1.25, 1.65, 1.985].map((y) => <B key={y} p={[0, y, 0]} s={[0.8, 0.03, 0.3]} c={color} r={0.004} rough={0.55} />)}
+    <B p={[0, 0.5, 0]} s={[0.3, 0.06, 0.2]} c={bk[0]} r={0.004} rough={0.85} />
+    <B p={[0, 0.56, 0]} s={[0.26, 0.05, 0.18]} c={bk[1]} r={0.004} rough={0.85} />
+    <mesh position={[0, 0.98, 0]} castShadow><cylinderGeometry args={[0.1, 0.07, 0.2, 18]} /><meshStandardMaterial color="#d8d2c6" roughness={0.5} /></mesh>
+    <B p={[0, 1.34, 0]} s={[0.34, 0.12, 0.2]} c="#b08a5a" r={0.02} rough={0.9} />
+    <B p={[0, 1.74, 0]} s={[0.12, 0.12, 0.1]} c={bk[3]} r={0.004} rough={0.85} />
+  </>)
   return (<>
     <B p={[0, 1.0, -0.14]} s={[0.8, 2.0, 0.02]} c={color} r={0.004} />
     {[-0.385, 0.385].map((x) => <B key={x} p={[x, 1.0, 0]} s={[0.03, 2.0, 0.3]} c={color} r={0.004} />)}
@@ -506,6 +517,32 @@ function Ac({ color }: P) {
   </>)
 }
 
+/** Framed picture, hung on a wall (bottom edge at the item's lift height). Front is +z. */
+function Painting({ color }: P) {
+  return (<>
+    <B p={[0, 0.25, 0]} s={[0.7, 0.5, 0.035]} c={color} r={0.006} rough={0.5} />
+    <B p={[0, 0.25, 0.019]} s={[0.62, 0.42, 0.004]} c="#efe8da" r={0.002} rough={0.95} />
+    <B p={[0, 0.1, 0.023]} s={[0.62, 0.14, 0.004]} c="#3f6f8f" r={0.002} rough={0.9} />
+    <B p={[-0.12, 0.2, 0.023]} s={[0.34, 0.12, 0.004]} c="#5c7f5a" r={0.002} rough={0.9} />
+    <mesh position={[0.16, 0.34, 0.024]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.07, 0.07, 0.004, 28]} /><meshStandardMaterial color="#e08a3c" roughness={0.9} /></mesh>
+  </>)
+}
+
+/** Glass vase with a bunch of flowers. */
+function Flowers({ color }: P) {
+  const blooms: [number, number, number, string][] = [[0, 0.5, 0, '#e8579a'], [-0.06, 0.44, 0.03, '#f4c542'], [0.06, 0.45, -0.02, '#f2f2f2'], [0.02, 0.4, 0.06, '#e8579a'], [-0.04, 0.4, -0.05, '#f4c542']]
+  return (<>
+    <mesh position={[0, 0.1, 0]} castShadow><cylinderGeometry args={[0.06, 0.045, 0.2, 20]} /><meshStandardMaterial color={color} roughness={0.15} metalness={0.1} transparent opacity={0.8} /></mesh>
+    {blooms.map(([x, y, z, c], i) => (
+      <group key={i}>
+        <mesh position={[x * 0.5, (y + 0.1) / 2, z * 0.5]} rotation={[z * 0.8, 0, -x * 0.8]}><cylinderGeometry args={[0.004, 0.004, y - 0.1, 5]} /><meshStandardMaterial color="#4f7a4a" roughness={0.9} /></mesh>
+        <mesh position={[x, y, z]} castShadow><sphereGeometry args={[0.04, 12, 10]} /><meshStandardMaterial color={c} roughness={0.8} /></mesh>
+      </group>
+    ))}
+    <mesh position={[0.05, 0.3, 0]} rotation={[0, 0, -0.5]}><sphereGeometry args={[0.06, 8, 6]} /><meshStandardMaterial color="#4f7a4a" roughness={0.9} flatShading /></mesh>
+  </>)
+}
+
 export function Model({ type, color, w, low, style }: { type: FType; color: string; w?: number; low?: boolean; style?: string }) {
   switch (type) {
     case 'sofa': return <Sofa color={color} style={style} />
@@ -533,11 +570,13 @@ export function Model({ type, color, w, low, style }: { type: FType; color: stri
     case 'tv': return <Tv color={color} />
     case 'mirror': return <Mirror color={color} style={style} />
     case 'ac': return <Ac color={color} />
-    case 'bookcase': return <Bookcase color={color} />
+    case 'bookcase': return <Bookcase color={color} style={style} />
     case 'dresser': return <Dresser color={color} />
     case 'shoeCabinet': return <ShoeCabinet color={color} />
     case 'desk': return <Desk color={color} style={style} />
     case 'cornerDesk': return <CornerDesk color={color} style={style} />
+    case 'painting': return <Painting color={color} />
+    case 'flowers': return <Flowers color={color} />
     case 'gamingDesk': return <GamingDesk color={color} />
     case 'treadmill': return <Treadmill color={color} style={style} />
     case 'floorLamp': return <FloorLamp color={color} style={style} />

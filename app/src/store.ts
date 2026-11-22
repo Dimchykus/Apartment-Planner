@@ -394,6 +394,7 @@ export const useStore = create<State>((set) => ({
       const item = f(id, type, m(cx), m(cy))
       if (type === 'shelf') item.y = 1.5
       if (type === 'tv' || type === 'mirror') item.y = 0.9
+      if (type === 'painting') item.y = 1.3
       if (type === 'ac') item.y = 2.25
       const carryDrag = { kind: 'furn' as const, id, dx: 0, dz: 0, carry: true, isNew: true, sx: item.x, sz: item.z, sy: item.y ?? 0, cy: 0 }
       if (type === 'gamingDesk') { // the player's chair comes with the setup, in front of the desk, and moves with it
@@ -519,6 +520,17 @@ export const useAllWalls = (): Wall[] => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => [...baseWalls, ...c], [c, flatId])
 }
+
+/** The saved state of a flat (furniture, layouts, edits, room kinds ...): a copy, or undefined if nothing is saved. */
+export function getFlatSave(id: string): FlatSave | undefined {
+  const sv = save.flats?.[id]
+  return sv ? structuredClone(sv) : undefined
+}
+export function putFlatSave(id: string, sv: FlatSave) {
+  save.flats![id] = sv
+  try { localStorage.setItem(KEY, JSON.stringify({ current: useStore.getState().flatId, flats: save.flats })) } catch { /* ignore */ }
+}
+export type { FlatSave }
 
 /** Forget the saved layout of one flat (used when its geometry was rebuilt or the flat was deleted). */
 export function forgetFlatSave(id: string) {

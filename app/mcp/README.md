@@ -12,3 +12,9 @@ check_furniture, set_room_kind, auto_furnish, clear_furniture, undo, redo, scree
 
 Security: the server listens on 127.0.0.1 only and the page connects only while the switch is on.
 `node test.mjs` runs an end-to-end check (needs the dev server and Chrome).
+
+## Walls
+
+`get_walls` (corners + walls, with `can_move` and the allowed sideways range), `shift_wall`, `move_node`, and `resize_room_to_area`
+(say the wanted net m² for a room and which of its walls to push; it solves the distance and reports the new area of every room).
+Only inner walls move: outer walls are locked by the app. The app limits (free corners inside a box, sliding corners along their outer wall) apply.

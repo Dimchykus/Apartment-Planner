@@ -1,6 +1,6 @@
 export type FType =
   | 'sofa' | 'lSofa' | 'armchair' | 'ottoman' | 'coffeeTable' | 'diningTable' | 'chair' | 'officeChair' | 'gamingChair'
-  | 'bed' | 'nightstand' | 'shower' | 'shelf' | 'tv' | 'mirror' | 'ac'
+  | 'bed' | 'nightstand' | 'shower' | 'shelf' | 'tv' | 'mirror' | 'ac' | 'painting' | 'flowers'
   | 'bookcase' | 'dresser' | 'shoeCabinet' | 'wardrobe' | 'tvUnit' | 'kitchen' | 'kitchenIsland' | 'fridge'
   | 'bathtub' | 'wc' | 'vanity' | 'washer' | 'desk' | 'cornerDesk' | 'gamingDesk' | 'treadmill' | 'floorLamp' | 'plant' | 'rug'
 
@@ -45,6 +45,8 @@ export const CATALOG: Record<FType, { label: string; w: number; d: number; h: nu
   floorLamp: { label: 'Floor lamp', w: 0.4, d: 0.4, h: 1.7, color: '#f0e2c8' },
   plant: { label: 'Potted plant', w: 0.45, d: 0.45, h: 1.35, color: '#4c7c48' },
   rug: { label: 'Rug / carpet', w: 2.0, d: 1.4, h: 0.02, color: '#cfc7ba' },
+  painting: { label: 'Painting (wall)', w: 0.7, d: 0.04, h: 0.5, color: '#2b2b2d', wallMounted: true }, // colour = frame
+  flowers: { label: 'Flowers in a vase', w: 0.22, d: 0.22, h: 0.55, color: '#e7eef0', wallMounted: true }, // colour = vase; stands on a table / shelf (lift_y) or the floor
 }
 
 export const isWallMounted = (t: FType) => !!CATALOG[t].wallMounted
@@ -99,6 +101,7 @@ export const PRESETS: Partial<Record<FType, Preset[]>> = {
   washer: [P('Slim', 0.6, 0.45), P('Standard', 0.6, 0.6)],
   desk: [P('120 cm', 1.2, 0.6, 1.15), P('140 cm', 1.4, 0.65, 1.15), P('160 cm', 1.6, 0.75, 1.15)],
   cornerDesk: [P('Compact', 1.4, 1.2), P('Standard', 1.6, 1.4), P('Large', 1.8, 1.5)],
+  painting: [P('Small 40×30', 0.4, 0.04, 0.3), P('Medium 70×50', 0.7, 0.04, 0.5), P('Large 100×70', 1.0, 0.04, 0.7), P('Wide 120×60', 1.2, 0.04, 0.6)],
   gamingDesk: [P('120 cm (1 monitor fits)', 1.2, 0.7), P('140 cm', 1.4, 0.75), P('160 cm', 1.6, 0.75), P('180 cm', 1.8, 0.8)],
   treadmill: [P('Unfolded (65×131×120)', 0.65, 1.31, 1.2), P('Folded (65×131×17)', 0.65, 1.31, 0.17)],
   tv: [P('32″', 0.75, 0.06, 0.45), P('43″', 0.95, 0.06, 0.56), P('55″', 1.25, 0.06, 0.72), P('65″', 1.45, 0.06, 0.84)],
@@ -121,6 +124,7 @@ export const STYLES: Partial<Record<FType, { id: string; label: string }[]>> = {
   diningTable: [{ id: 'rect', label: 'Rectangular' }, { id: 'round', label: 'Round / oval' }],
   chair: [{ id: 'standard', label: 'Chair' }, { id: 'stool', label: 'Bar stool' }],
   bed: [{ id: 'soft', label: 'Upholstered headboard' }, { id: 'wood', label: 'Wooden headboard' }, { id: 'platform', label: 'Low platform' }],
+  bookcase: [{ id: 'closed', label: 'Closed back (against a wall)' }, { id: 'open', label: 'Open on all sides (freestanding rack)' }],
   wardrobe: [{ id: 'hinged', label: 'Hinged doors' }, { id: 'sliding', label: 'Sliding doors' }],
   desk: [{ id: 'workstation', label: 'PC + 2 monitors' }, { id: 'plain', label: 'Empty desk' }],
   cornerDesk: [{ id: 'right', label: 'Return on right' }, { id: 'left', label: 'Return on left' }],

@@ -599,8 +599,8 @@ export function Keys() {
       const t = e.target as HTMLElement | null
       const typing = t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && ['text', 'number', 'search'].includes(t.type))
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !typing) {
-        const isZ = e.code === 'KeyZ' || e.key.toLowerCase() === 'z'
-        const isY = e.code === 'KeyY' || e.key.toLowerCase() === 'y'
+        const isZ = e.code === 'KeyZ' || e.key.toLowerCase() === 'z' || e.keyCode === 90
+        const isY = e.code === 'KeyY' || e.key.toLowerCase() === 'y' || e.keyCode === 89
         if (isZ && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); s.undo(); return }
         if (isY || (isZ && e.shiftKey)) { e.preventDefault(); e.stopPropagation(); s.redo(); return }
       }

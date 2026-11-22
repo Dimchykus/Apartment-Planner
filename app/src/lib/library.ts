@@ -318,27 +318,42 @@ export function buildFlat(u: Pick<UserFlat, 'id' | 'name' | 'image' | 'imgW' | '
 }
 
 // ───────────────────────── a built-in flat -> trace (so it can be copied and edited) ─────────────────────────
-export function traceFromDef(def: FlatDef): TraceState {
-  const thick = def.walls.map((w) => w.thick), outer = Math.max(...thick), inner = Math.min(...thick)
+/** What the user changed in a flat after it was made (saved per flat); baked into the copy so it is exactly what they see. */
+export type FlatEdits = { nodes?: Record<string, Pt>; customWalls?: Wall[]; openings?: Record<string, Opening[]>; roomKinds?: Record<string, string> }
+
+export function traceFromDef(def: FlatDef, edits: FlatEdits = {}): TraceState {
+  const pxm = def.pxPerM
+  const nodes: Record<string, Pt> = structuredClone(def.nodes)
+  for (const k of Object.keys(def.editable)) if (edits.nodes?.[k]) nodes[k] = edits.nodes[k]
+  const custom = edits.customWalls ?? []
+  for (const w of custom) for (const k of [w.a, w.b]) { const q = edits.nodes?.[k]; if (q) nodes[k] = q }
+  const all: Wall[] = [...def.walls, ...custom]
+  const thick = all.map((w) => w.thick), outer = Math.max(...thick), inner = Math.min(...thick)
   const t: TraceState = {
-    pxPerM: def.pxPerM, nodes: structuredClone(def.nodes),
-    walls: def.walls.map((w) => ({ id: 'w' + w.id, a: w.a, b: w.b })),
+    pxPerM: pxm, nodes,
+    walls: all.map((w) => ({ id: 'w' + w.id, a: w.a, b: w.b, thick: Math.round((w.thick / pxm) * 100) })), // every wall keeps its own thickness
     openings: [], rooms: [], fixtures: structuredClone(def.hints ?? {}),
-    outerThick: Math.round((outer / def.pxPerM) * 100), innerThick: Math.round((inner / def.pxPerM) * 100),
+    outerThick: Math.round((outer / pxm) * 100), innerThick: Math.round((inner / pxm) * 100),
   }
-  for (const w of def.walls) {
-    const A = def.nodes[w.a], B = def.nodes[w.b], L = dist(A, B)
-    for (const o of w.openings ?? []) {
+  for (const w of all) {
+    const A = nodes[w.a], B = nodes[w.b]
+    if (!A || !B) continue
+    const L = dist(A, B)
+    let list: Opening[] = edits.openings?.[w.id] ?? w.openings ?? []
+    if (w.door && !edits.openings?.[w.id] && L >= 1.3 * pxm) list = [{ from: L / 2 - 0.45 * pxm, to: L / 2 + 0.45 * pxm, sill: 0, top: 2.05, kind: 'door' }] // a "doorway" wall carries a door in the middle
+    for (const o of list) {
       const from = o.end === 'b' ? L - o.to : o.from, to = o.end === 'b' ? L - o.from : o.to
       const m = (from + to) / 2 / L
-      t.openings.push({ id: uid('o'), at: [A[0] + (B[0] - A[0]) * m, A[1] + (B[1] - A[1]) * m], kind: o.kind, width: (to - from) / def.pxPerM, sill: o.sill, top: o.top })
+      t.openings.push({ id: uid('o'), at: [A[0] + (B[0] - A[0]) * m, A[1] + (B[1] - A[1]) * m], kind: o.kind, width: (to - from) / pxm, sill: o.sill, top: o.top })
     }
   }
+  const KIND: Record<string, RoomTypeId> = { open: 'open', living: 'living', kitchen: 'kitchen', bedroom: 'bedroom', bath: 'bath', office: 'office', storage: 'storage' }
   for (const r of def.rooms) {
-    const poly = r.nodes.map((k) => def.nodes[k])
+    const poly = r.nodes.map((k) => nodes[k]).filter(Boolean)
     const n = r.name.toLowerCase()
-    const type: RoomTypeId = r.skip ? 'shaft' : n.includes('bath') ? 'bath' : n.includes('bed') ? 'bedroom' : n.includes('loggia') ? 'loggia'
+    const byName: RoomTypeId = r.skip ? 'shaft' : n.includes('bath') ? 'bath' : n.includes('bed') ? 'bedroom' : n.includes('loggia') ? 'loggia'
       : n.includes('kitchen') && n.includes('living') ? 'open' : n.includes('living') ? 'living' : n.includes('kitchen') ? 'kitchen' : n.includes('office') ? 'office' : 'hall'
+    const type: RoomTypeId = r.skip || r.floor === 'loggia' ? byName : KIND[edits.roomKinds?.[r.id] ?? ''] ?? byName
     t.rooms.push({ id: uid('r'), at: interiorPoint(poly), type, stated: r.stated })
   }
   return t
