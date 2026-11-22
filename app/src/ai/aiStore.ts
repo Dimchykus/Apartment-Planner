@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { useStore } from '../store'
 import { useUI } from '../ui/uiStore'
-import { DEFAULT_AI, diagnose, explainError, pickModel, type AISettings, type Diagnosis } from './ollama'
+import { DEFAULT_AI, deleteModel, diagnose, explainError, listModelInfo, pickModel, pullModel, type AISettings, type Diagnosis } from './ollama'
 import { aiFurnish, type Variant } from './run'
 
 const KEY = 'planner-ai-v1'
@@ -17,6 +17,12 @@ function load(): AISettings {
 type AIState = {
   settings: AISettings
   models: string[]
+  sizes: Record<string, number>        // installed model -> bytes
+  pulling: { name: string; status: string; pct: number | null } | null
+  pull: (name: string) => Promise<void>
+  cancelPull: () => void
+  remove: (name: string) => Promise<void>
+  modelError: string
   connected: boolean | null            // null = not checked yet (true = Ollama reachable and allowed)
   diag: Diagnosis | null
   checking: boolean
@@ -34,8 +40,9 @@ type AIState = {
 }
 
 let ctl: AbortController | null = null
+let pullCtl: AbortController | null = null
 export const useAI = create<AIState>((set, get) => ({
-  settings: load(), models: [], connected: null, diag: null, checking: false, busy: null, variants: [], applied: null, error: '',
+  settings: load(), models: [], sizes: {}, pulling: null, modelError: '', connected: null, diag: null, checking: false, busy: null, variants: [], applied: null, error: '',
   patch: (p) => { set((s) => ({ settings: { ...s.settings, ...p, ...(p.model !== undefined && p.auto === undefined ? { auto: false } : {}) } })); try { localStorage.setItem(KEY, JSON.stringify(get().settings)) } catch { /* ignore */ } },
   refreshModels: async () => {
     if (get().checking) return
@@ -47,6 +54,7 @@ export const useAI = create<AIState>((set, get) => ({
       if (best !== get().settings.model) { get().patch({ model: best, auto: true }); d = await diagnose(get().settings) }
     }
     set({ diag: d, models: d.models, connected: d.running && d.steps[1].ok === true, checking: false, error: '' })
+    if (d.running && d.steps[1].ok === true) { try { set({ sizes: Object.fromEntries((await listModelInfo(get().settings.url)).map((m) => [m.name, m.size])) }) } catch { /* sizes are optional */ } }
   },
   testModel: async () => {
     if (get().checking) return
@@ -83,4 +91,21 @@ export const useAI = create<AIState>((set, get) => ({
     set({ applied: id })
   },
   clear: () => set({ variants: [], applied: null }),
+  pull: async (name) => {
+    if (get().pulling) return
+    pullCtl = new AbortController()
+    set({ pulling: { name, status: 'starting…', pct: null }, modelError: '' })
+    try {
+      await pullModel(get().settings.url, name, (status, pct) => set({ pulling: { name, status, pct } }), pullCtl.signal)
+      useUI.getState().showToast('Installed ' + name)
+    } catch (e) { set({ modelError: explainError(e, get().settings.url) }) }
+    set({ pulling: null })
+    await get().refreshModels()
+  },
+  cancelPull: () => { pullCtl?.abort() },
+  remove: async (name) => {
+    set({ modelError: '' })
+    try { await deleteModel(get().settings.url, name); useUI.getState().showToast('Deleted ' + name) } catch (e) { set({ modelError: explainError(e, get().settings.url) }) }
+    await get().refreshModels()
+  },
 }))

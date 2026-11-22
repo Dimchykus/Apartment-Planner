@@ -47,7 +47,7 @@ export function Electrics({ view2d, ceiling2d }: { view2d: boolean; ceiling2d: b
     for (const l of lights) if (l.group === 'main' && (!first.has(l.room) || (l.kind === 'pendant' && first.get(l.room)!.kind !== 'pendant'))) first.set(l.room, l)
     return [...first.values()]
   }, [lights])
-  const maxSources = q === 'low' ? 0 : q === 'med' ? 4 : 10
+  const maxSources = q === 'low' ? 0 : q === 'med' ? 6 : 12
 
   const swPos = (s: (typeof switches)[number]) => {
     const w = wallOf.get(s.wall)

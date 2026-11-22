@@ -1,6 +1,8 @@
 import { useStore } from '../store'
 import { useAI } from '../ai/aiStore'
 import { Icon } from './Icon'
+import { useUI } from './uiStore'
+import { isUserFlat } from '../lib/libraryActions'
 
 /** Setup stage banner: walls, windows and rooms are fixed first; then furniture layouts can be made on top. */
 export function StageBanner() {
@@ -12,7 +14,12 @@ export function StageBanner() {
       <button className="btn primary" onClick={() => s.setStage('design')}><Icon n="check" size={15} /> Finish setup, start furnishing</button>
     </div>
   )
-  return <button className="btn sm" onClick={() => s.setStage('setup')} title="Walls, windows and rooms are shared by every layout; changing them may need a re-fit of the furniture">Edit flat setup</button>
+  return (
+    <div className="row2">
+      <button className="btn" onClick={() => s.setStage('setup')} title="Walls, windows and rooms are shared by every layout; changing them may need a re-fit of the furniture"><Icon n="edit" size={15} /> Edit flat setup</button>
+      {isUserFlat(s.flatId) && <button className="btn" onClick={() => useUI.getState().openTracer(s.flatId)} title="Re-open the plan tracer: walls, doors, windows, rooms and scale"><Icon n="layers" size={15} /> Open plan tracer</button>}
+    </div>
+  )
 }
 
 /** Furniture layouts of this flat. The setup stays the same; only the furniture differs between layouts. */

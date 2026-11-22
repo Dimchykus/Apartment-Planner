@@ -4,6 +4,7 @@ import { Icon } from './Icon'
 import { presetOf, CRITERIA_PRESETS } from '../criteria'
 import { useStore } from '../store'
 import { useUI } from './uiStore'
+import { AiConnectButton } from './AiConnect'
 
 const pct = (v: number) => Math.round(v * 100) + '%'
 
@@ -67,6 +68,7 @@ export function AiPanel() {
   return (<>
     <p className="hint">A local language model (Ollama) plans each room, then the app checks every piece against the real walls, doors and windows. Each run gives different layouts; the best match for your wishes is shown first.</p>
     <SetupCheck />
+    <AiConnectButton />
     <small className="muted">Wishes used: <b>{wish}</b> (change them in Furniture → Placement criteria)</small>
 
     {ai.busy ? (

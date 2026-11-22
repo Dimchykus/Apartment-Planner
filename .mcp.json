@@ -1,0 +1,5 @@
+{
+  "mcpServers": {
+    "flat-planner": { "command": "node", "args": ["app/mcp/server.mjs"] }
+  }
+}

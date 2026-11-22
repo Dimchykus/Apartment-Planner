@@ -10,6 +10,7 @@ import { misplaced } from '../autofurnish'
 import { CriteriaPanel, SpaceSummary, RoomsPanel, FurnPanel } from './Panels'
 import { StylePanel, OpeningsPanel, DoorLightControls } from './StylePanels'
 import { AiPanel } from './AiPanel'
+import { DimsPanel } from './DimsPanel'
 import { useAI } from '../ai/aiStore'
 import { StageBanner, VersionsPanel } from './VersionsCard'
 import { startCarry } from '../Editor'
@@ -80,7 +81,7 @@ function ModePanel() {
   if (mode === 'view') return (<>{!on2d && <ProjectionSwitch />}{tip(<>{on2d ? 'Top-down plan. ' : ''}{touch ? 'One finger turns, two zoom.' : 'Drag = turn · right-drag = move · wheel = zoom.'}</>)}</>)
   if (mode === 'walk') return tip(touch ? 'Stick = walk, drag = look.' : <>Click to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run · <kbd>E</kbd> use · <kbd>Esc</kbd> release.</>)
   if (mode === 'fly') return tip(touch ? 'Stick = fly, ▲▼ = up / down.' : <>Click to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly · <kbd>Space</kbd>/<kbd>C</kbd> up / down · wheel = speed.</>)
-  if (mode === 'dims') return tip('Lengths in cm. Blue = clear wall length, grey = thickness, brown / teal = doors / windows.')
+  if (mode === 'dims') return <DimsPanel />
   if (mode === 'rooms') return <RoomsPanel />
   if (mode === 'style') return <StylePanel />
   if (mode === 'openings') return (<><OpeningsPanel /><ViewTools /></>)
@@ -170,10 +171,26 @@ function Scene() {
     </label>
     <div className="lbl-row"><span>Orbit camera</span></div>
     <ProjectionSwitch />
-    <label className="row">Graphics
-      <select value={u.quality} onChange={(e) => u.setQuality(e.target.value as typeof u.quality)}>
-        <option value="low">Fast (phones, old PCs)</option><option value="med">Balanced</option><option value="high">Best looking</option>
+    <div className="lbl-row"><span>Graphics mode</span></div>
+    <div className="seg">
+      {([['low', 'Performance'], ['med', 'Balanced'], ['high', 'Quality']] as const).map(([id, label]) => (
+        <button key={id} className={'btn' + (u.quality === id ? ' on' : '')} onClick={() => u.setQuality(id)} title={id === 'low' ? 'Simple shadows, no ambient occlusion: for phones and old PCs' : id === 'med' ? 'Shadows and ambient occlusion at moderate cost' : 'Soft shadows, ambient occlusion, bloom: heaviest'}>{label}</button>
+      ))}
+    </div>
+    <label className="row">Resolution
+      <select value={u.res} onChange={(e) => u.setRes(+e.target.value)}>
+        <option value={0}>Automatic</option><option value={1}>Full (100%)</option><option value={0.75}>75%</option><option value={0.5}>50%</option><option value={0.35}>35% (lowest GPU load)</option>
       </select>
+    </label>
+    <label className="row">Frame rate
+      <select value={u.fps} onChange={(e) => u.setFps(+e.target.value)}>
+        <option value={0}>Unlimited (screen speed)</option><option value={60}>60 FPS</option><option value={45}>45 FPS</option><option value={30}>30 FPS (saves GPU)</option><option value={20}>20 FPS</option>
+      </select>
+    </label>
+    <label className="check"><input type="checkbox" checked={u.showFps} onChange={(e) => u.setShowFps(e.target.checked)} /> Show FPS counter</label>
+    <label className="check" title="Lets Claude (Claude Code with the flat-planner MCP server, see app/mcp) read this flat and edit its furniture from the chat. Local only.">
+      <input type="checkbox" checked={u.mcp} onChange={(e) => u.setMcp(e.target.checked)} /> Claude connection (MCP)
+      {u.mcp && <em className="pill" style={{ marginLeft: 6, color: u.mcpOn ? '#3a9d5d' : '#e08a1e' }}>{u.mcpOn ? 'connected' : 'waiting for server…'}</em>}
     </label>
     <DoorLightControls />
     {u.on2d && <label className="check"><input type="checkbox" checked={u.ceiling2d} onChange={(e) => u.setCeiling2d(e.target.checked)} /> Show the ceiling in the 2D view</label>}

@@ -19,7 +19,7 @@ export const roomType = (id: RoomTypeId) => ROOM_TYPES.find((t) => t.id === id) 
 
 export type TraceOpening = { id: string; at: Pt; kind: 'door' | 'window'; width: number; sill?: number; top?: number } // width in metres
 export type TraceRoom = { id: string; at: Pt; type: RoomTypeId; stated?: number }
-export type TraceWall = { id: string; a: string; b: string }
+export type TraceWall = { id: string; a: string; b: string; thick?: number; divider?: boolean /* only splits a room from another: no wall is built */ } // thick: this wall's own thickness in cm (else the outer / inner default)
 export type TraceState = {
   pxPerM: number | null
   nodes: Record<string, Pt>
@@ -29,6 +29,7 @@ export type TraceState = {
   fixtures: Partial<Record<FType, Pt>>
   outerThick: number // cm
   innerThick: number // cm
+  dividerThick?: number // cm: strip taken off both rooms along a room divider (0 = they meet at the line)
 }
 export const emptyTrace = (): TraceState => ({ pxPerM: null, nodes: {}, walls: [], openings: [], rooms: [], fixtures: {}, outerThick: 25, innerThick: 12 })
 
@@ -66,7 +67,7 @@ const uid = (p: string) => p + (Date.now().toString(36) + (idc++).toString(36))
 
 // ───────────────────────── editing the wall graph ─────────────────────────
 /** Add a wall from p to q. Ends snap to nodes / walls within `snap` px; crossings and T-junctions are split automatically. */
-export function addWall(t: TraceState, p: Pt, q: Pt, snap: number): TraceState {
+export function addWall(t: TraceState, p: Pt, q: Pt, snap: number, divider = false): TraceState {
   const nodes = { ...t.nodes }
   let walls = [...t.walls]
   const nodeAt = (pt: Pt): string | null => {
@@ -76,7 +77,7 @@ export function addWall(t: TraceState, p: Pt, q: Pt, snap: number): TraceState {
   }
   const splitWall = (w: TraceWall, id: string) => {
     walls = walls.filter((x) => x.id !== w.id)
-    for (const [a, b] of [[w.a, id], [id, w.b]]) if (a !== b && !walls.some((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a))) walls.push({ id: uid('w'), a, b })
+    for (const [a, b] of [[w.a, id], [id, w.b]]) if (a !== b && !walls.some((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a))) walls.push({ id: uid('w'), a, b, ...(w.thick ? { thick: w.thick } : {}), ...(w.divider ? { divider: true } : {}) })
   }
   const ensureNode = (pt: Pt): string => {
     const near = nodeAt(pt)
@@ -111,7 +112,7 @@ export function addWall(t: TraceState, p: Pt, q: Pt, snap: number): TraceState {
   cuts.sort((x, y) => x.t - y.t)
   for (let i = 0; i + 1 < cuts.length; i++) {
     const a = cuts[i].id, b = cuts[i + 1].id
-    if (a !== b && !walls.some((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a))) walls.push({ id: uid('w'), a, b })
+    if (a !== b && !walls.some((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a))) walls.push({ id: uid('w'), a, b, ...(divider ? { divider: true } : {}) })
   }
   return { ...t, nodes, walls }
 }
@@ -149,6 +150,34 @@ export function faces(t: TraceState): Face[] {
   for (const f of out) f.outer = Math.sign(f.area) === Math.sign(big.area) && Math.abs(f.area) > 1e-6
   return out.filter((f) => Math.abs(f.area) > 1e-6)
 }
+/** Floor area of a closed area in m²: every wall line is moved in by half its own thickness, then the corners are re-cut. */
+export function netFace(t: TraceState, f: Face, pxm: number): { area: number; poly: Pt[] } {
+  const n = f.poly.length
+  if (n < 3 || !pxm) return { area: 0, poly: [] }
+  const sgn = Math.sign(f.area) || 1
+  const outerPx = (t.outerThick / 100) * pxm, innerPx = (t.innerThick / 100) * pxm
+  const outerE = new Set<string>()
+  for (const q of faces(t)) if (q.outer) for (let i = 0; i < q.nodes.length; i++) { const a = q.nodes[i], b = q.nodes[(i + 1) % q.nodes.length]; outerE.add(a + '|' + b); outerE.add(b + '|' + a) }
+  const lines = f.poly.map((p, i) => {
+    const q = f.poly[(i + 1) % n], a = f.nodes[i], b = f.nodes[(i + 1) % n]
+    const w = t.walls.find((x) => (x.a === a && x.b === b) || (x.a === b && x.b === a))
+    const th = (w?.divider ? ((t.dividerThick ?? 0) / 100) * pxm : w?.thick ? (w.thick / 100) * pxm : outerE.has(a + '|' + b) ? outerPx : innerPx) / 2
+    const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy) || 1
+    // inward normal: left of the direction for a positive (counter-clockwise in y-up maths) area
+    const nx = (-dy / L) * sgn, ny = (dx / L) * sgn
+    return { p: [p[0] + nx * th, p[1] + ny * th] as Pt, d: [dx, dy] as Pt }
+  })
+  const pts: Pt[] = []
+  for (let i = 0; i < n; i++) {
+    const A = lines[(i + n - 1) % n], B = lines[i]
+    const den = A.d[0] * B.d[1] - A.d[1] * B.d[0]
+    if (Math.abs(den) < 1e-9) { pts.push(B.p); continue }
+    const s = ((B.p[0] - A.p[0]) * B.d[1] - (B.p[1] - A.p[1]) * B.d[0]) / den
+    pts.push([A.p[0] + A.d[0] * s, A.p[1] + A.d[1] * s])
+  }
+  return { area: Math.abs(area2(pts)) / pxm / pxm, poly: pts }
+}
+export const netFaceArea = (t: TraceState, f: Face, pxm: number) => netFace(t, f, pxm).area
 export const innerFaces = (t: TraceState) => faces(t).filter((f) => !f.outer)
 export function faceAt(t: TraceState, pt: Pt): Face | null {
   let best: Face | null = null
@@ -200,7 +229,9 @@ export function buildFlat(u: Pick<UserFlat, 'id' | 'name' | 'image' | 'imgW' | '
   const nodes: Record<string, Pt> = {}
   Object.keys(t.nodes).forEach((k, i) => { nid[k] = 'n' + (i + 1); nodes[nid[k]] = t.nodes[k] })
   const outerPx = (t.outerThick / 100) * pxm, innerPx = (t.innerThick / 100) * pxm
-  const walls: Wall[] = t.walls.map((w, i) => ({ id: 'w' + (i + 1), a: nid[w.a], b: nid[w.b], thick: outerEdges.has(w.a + '|' + w.b) ? outerPx : innerPx, openings: [] as Opening[] }))
+  const tw = t.walls.filter((w) => !w.divider) // room dividers only cut rooms apart, no wall is built there
+  const walls: Wall[] = tw.map((w, i) => ({ id: 'w' + (i + 1), a: nid[w.a], b: nid[w.b], thick: w.thick ? (w.thick / 100) * pxm : outerEdges.has(w.a + '|' + w.b) ? outerPx : innerPx, openings: [] as Opening[] }))
+  const outerIds = new Set(walls.filter((_, i) => outerEdges.has(tw[i].a + '|' + tw[i].b)).map((w) => w.id))
   // doors and windows -> openings on the nearest wall
   let unplaced = 0
   for (const o of t.openings) {
@@ -243,8 +274,8 @@ export function buildFlat(u: Pick<UserFlat, 'id' | 'name' | 'image' | 'imgW' | '
   const box: [number, number, number, number] = [Math.min(...xs) + 0.3 * pxm, Math.min(...ys) + 0.3 * pxm, Math.max(...xs) - 0.3 * pxm, Math.max(...ys) - 0.3 * pxm]
   for (const k of Object.keys(nodes)) {
     const inc = walls.filter((w) => w.a === k || w.b === k)
-    const outerInc = inc.filter((w) => w.thick === outerPx)
-    const innerInc = inc.filter((w) => w.thick !== outerPx)
+    const outerInc = inc.filter((w) => outerIds.has(w.id))
+    const innerInc = inc.filter((w) => !outerIds.has(w.id))
     if (!innerInc.length) continue
     if (!outerInc.length) editable[k] = { type: 'free', box }
     else if (outerInc.length === 2 && innerInc.length >= 1) {
@@ -259,7 +290,7 @@ export function buildFlat(u: Pick<UserFlat, 'id' | 'name' | 'image' | 'imgW' | '
   let start: Pt = interiorPoint(rooms[0].nodes.map((k) => nodes[k]))
   for (const w of walls) {
     const door = w.openings?.find((o) => o.kind === 'door')
-    if (!door || w.thick !== outerPx) continue
+    if (!door || !outerIds.has(w.id)) continue
     const L = dist(nodes[w.a], nodes[w.b]), tt = (door.from + door.to) / 2 / L
     const p: Pt = [nodes[w.a][0] + (nodes[w.b][0] - nodes[w.a][0]) * tt, nodes[w.a][1] + (nodes[w.b][1] - nodes[w.a][1]) * tt]
     const k = (0.7 * pxm) / (dist(p, cen) || 1)

@@ -6,7 +6,7 @@ export type Theme = 'light' | 'dark'
 export const isTouch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
 
 const KEY = 'planner-ui-v1'
-type Saved = { rulesOnCriteria?: boolean; theme?: Theme; quality?: Quality; cards?: Record<string, boolean>; helpSeen?: boolean; env?: EnvId; menuOpen?: boolean }
+type Saved = { rulesOnCriteria?: boolean; theme?: Theme; quality?: Quality; res?: number; fps?: number; mcp?: boolean; showFps?: boolean; cards?: Record<string, boolean>; helpSeen?: boolean; env?: EnvId; menuOpen?: boolean }
 function load(): Saved { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
 const saved = load()
 // handy for links and testing: ?theme=light|dark  ?quality=low|med|high  ?menu=0|1  ?help=0
@@ -22,6 +22,13 @@ type UI = {
   sheetFull: boolean              // mobile bottom sheet: tall / compact
   theme: Theme
   quality: Quality
+  mcp: boolean // the local MCP server may edit the furniture (menu switch)
+  mcpOn: boolean // ... and is connected right now
+  setMcp: (b: boolean) => void
+  setMcpOn: (b: boolean) => void
+  fps: number // frame-rate cap, 0 = as fast as the screen
+  showFps: boolean
+  res: number // render resolution as a share of the screen's pixels: 0 = automatic (from the graphics mode)
   env: EnvId
   on2d: boolean
   overlay: boolean
@@ -38,12 +45,17 @@ type UI = {
   helpOpen: boolean
   helpSeen: boolean
   tracer: { id: string | null } | null // plan tracer (null = closed; id = flat being edited, null = new flat)
+  aiModal: boolean                // the local AI connection / models window (usable from any screen)
+  setAiModal: (v: boolean) => void
   flatsVersion: number            // bumped whenever the flat list changes
   toast: string | null
   setMenuOpen: (v: boolean) => void
   setSheetFull: (v: boolean) => void
   setTheme: (t: Theme) => void
   setQuality: (q: Quality) => void
+  setRes: (r: number) => void
+  setFps: (f: number) => void
+  setShowFps: (b: boolean) => void
   setEnv: (e: EnvId) => void
   setOn2d: (v: boolean) => void
   setOverlay: (v: boolean) => void
@@ -64,6 +76,13 @@ export const useUI = create<UI>((set, get) => ({
   setToolsOpen: (toolsOpen) => set({ toolsOpen }),
   setSheetTab: (sheetTab) => set({ sheetTab }),
   theme: (qs.get('theme') as Theme) || saved.theme || (prefersDark ? 'dark' : 'light'),
+  mcp: qs.has('mcp') || (saved.mcp ?? false),
+  mcpOn: false,
+  setMcp: (mcp) => set({ mcp }),
+  setMcpOn: (mcpOn) => set({ mcpOn }),
+  fps: qs.has('fps') ? Number(qs.get('fps')) : saved.fps ?? 60,
+  showFps: saved.showFps ?? false,
+  res: Number(qs.get('res')) || saved.res || 0,
   quality: (qs.get('quality') as Quality) || saved.quality || (isTouch ? 'low' : 'high'),
   env: saved.env ?? 'day',
   on2d: false,
@@ -81,12 +100,17 @@ export const useUI = create<UI>((set, get) => ({
   helpOpen: qs.get('help') === '0' ? false : !saved.helpSeen,
   helpSeen: !!saved.helpSeen,
   tracer: qs.has('tracer') ? { id: null } : null,
+  aiModal: false,
+  setAiModal: (aiModal) => set({ aiModal }),
   flatsVersion: 0,
   toast: null,
   setMenuOpen: (menuOpen) => set({ menuOpen }),
   setSheetFull: (sheetFull) => set({ sheetFull }),
   setTheme: (theme) => set({ theme }),
   setQuality: (quality) => set({ quality }),
+  setRes: (res) => set({ res }),
+  setFps: (fps) => set({ fps }),
+  setShowFps: (showFps) => set({ showFps }),
   setEnv: (env) => set({ env }),
   setOn2d: (on2d) => set({ on2d }),
   setOverlay: (overlay) => set({ overlay }),
@@ -100,5 +124,5 @@ export const useUI = create<UI>((set, get) => ({
 }))
 
 useUI.subscribe((s) => {
-  try { localStorage.setItem(KEY, JSON.stringify({ rulesOnCriteria: s.rulesOnCriteria, theme: s.theme, quality: s.quality, cards: s.cards, helpSeen: s.helpSeen, env: s.env, menuOpen: s.menuOpen } satisfies Saved)) } catch { /* ignore */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ rulesOnCriteria: s.rulesOnCriteria, theme: s.theme, quality: s.quality, res: s.res, mcp: s.mcp, fps: s.fps, showFps: s.showFps, cards: s.cards, helpSeen: s.helpSeen, env: s.env, menuOpen: s.menuOpen } satisfies Saved)) } catch { /* ignore */ }
 })

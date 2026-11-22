@@ -1,6 +1,6 @@
 export type FType =
   | 'sofa' | 'armchair' | 'coffeeTable' | 'diningTable' | 'chair' | 'bed' | 'nightstand' | 'shower'
-  | 'shelf' | 'tv' | 'bookcase' | 'dresser' | 'shoeCabinet' | 'wardrobe' | 'tvUnit' | 'kitchen' | 'fridge' | 'bathtub' | 'wc' | 'vanity' | 'washer' | 'desk'
+  | 'shelf' | 'tv' | 'bookcase' | 'dresser' | 'shoeCabinet' | 'wardrobe' | 'tvUnit' | 'kitchen' | 'fridge' | 'bathtub' | 'wc' | 'vanity' | 'washer' | 'desk' | 'gamingDesk' | 'gamingChair'
 
 /** w / d override the catalog size (metres); the model is stretched to fit. */
 export type Finish = 'matte' | 'satin' | 'gloss'
@@ -30,6 +30,8 @@ export const CATALOG: Record<FType, { label: string; w: number; d: number; h: nu
   vanity: { label: 'Vanity + sink', w: 0.8, d: 0.5, h: 0.85, color: '#d9d3c8' },
   washer: { label: 'Washer', w: 0.6, d: 0.6, h: 0.85, color: '#eceff1' },
   desk: { label: 'Desk', w: 1.4, d: 0.65, h: 0.75, color: '#c9b79c' },
+  gamingDesk: { label: 'Gaming setup (desk, 2 monitors, PC)', w: 1.6, d: 0.75, h: 1.12, color: '#26272c' },
+  gamingChair: { label: 'Gaming chair', w: 0.66, d: 0.68, h: 1.3, color: '#c1272d' }, // colour = accent (stripes, headrest)
 }
 
 export const sizeOf = (q: Furn) => {
@@ -57,6 +59,7 @@ export const PRESETS: Partial<Record<FType, Preset[]>> = {
   vanity: [P('50 cm', 0.5, 0.5), P('60 cm', 0.6, 0.5), P('80 cm', 0.8, 0.5), P('100 cm', 1.0, 0.5)],
   washer: [P('Slim', 0.6, 0.45), P('Standard', 0.6, 0.6)],
   desk: [P('100 cm', 1.0, 0.6), P('140 cm', 1.4, 0.65), P('160 cm', 1.6, 0.75)],
+  gamingDesk: [P('120 cm (1 monitor fits)', 1.2, 0.7), P('140 cm', 1.4, 0.75), P('160 cm', 1.6, 0.75), P('180 cm', 1.8, 0.8)],
   tv: [P('32″', 0.75, 0.06, 0.45), P('43″', 0.95, 0.06, 0.56), P('55″', 1.25, 0.06, 0.72), P('65″', 1.45, 0.06, 0.84)],
   bookcase: [P('40 cm', 0.4, 0.3), P('60 cm', 0.6, 0.3), P('80 cm', 0.8, 0.3), P('120 cm', 1.2, 0.35)],
   dresser: [P('80 cm', 0.8, 0.4), P('100 cm', 1.0, 0.45), P('120 cm', 1.2, 0.45)],

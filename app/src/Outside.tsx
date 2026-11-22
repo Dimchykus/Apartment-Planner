@@ -56,7 +56,7 @@ export function SunLight({ env, cx, cz }: { env: EnvId; cx: number; cz: number }
     <>
       <primitive object={target} />
       <directionalLight ref={ref} castShadow position={[cx + d.x, Math.max(d.y, 2.5), cz + d.z]} intensity={e.sunI} color={e.sunColor}
-        shadow-mapSize={[4096, 4096]} shadow-bias={-0.0004}
+        shadow-mapSize={[3072, 3072]} shadow-bias={-0.0004}
         shadow-camera-left={-14} shadow-camera-right={14} shadow-camera-top={14} shadow-camera-bottom={-14} shadow-camera-far={90} />
     </>
   )
