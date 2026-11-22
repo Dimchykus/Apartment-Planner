@@ -239,18 +239,18 @@ export const useStore = create<State>((set) => ({
     if (!p) return
     applying = true
     setOpeningOv(p.openings); setDoorStateOv(p.doorState)
-    set({ ...p, past: st.past.slice(0, -1), future: [...st.future, snapOf(st)], selected: null, drag: null, selOpening: null })
+    set({ ...p, past: st.past.slice(0, -1), future: [...st.future, snapOf(st)], selected: null, drag: null, guide: null, selOpening: null })
     useStore.getState().regenElectrics()
-    applying = false; lastPush = 0
+    applying = false; lastPush = 0; lastPushKey = ''
   },
   redo: () => {
     const st = useStore.getState(), n = st.future[st.future.length - 1]
     if (!n) return
     applying = true
     setOpeningOv(n.openings); setDoorStateOv(n.doorState)
-    set({ ...n, future: st.future.slice(0, -1), past: [...st.past, snapOf(st)], selected: null, drag: null, selOpening: null })
+    set({ ...n, future: st.future.slice(0, -1), past: [...st.past, snapOf(st)], selected: null, drag: null, guide: null, selOpening: null })
     useStore.getState().regenElectrics()
-    applying = false; lastPush = 0
+    applying = false; lastPush = 0; lastPushKey = ''
   },
   switchFlat: (id) => {
     const s0 = useStore.getState()
@@ -443,22 +443,35 @@ useStore.subscribe((s, prev) => {
 })
 
 // Undo history: every change to walls / furniture / rooms / criteria is recorded automatically.
-// A whole drag counts as one step, and a burst of slider changes on one item is merged.
+// A whole drag counts as one step, and a burst of slider changes on one item/opening is merged.
 const SNAP_KEYS = ['nodes', 'customWalls', 'furniture', 'roomKinds', 'hintOv', 'criteria', 'openings', 'doorState', 'roomStyle'] as const
 function snapOf(s: State): Snap { return { nodes: s.nodes, customWalls: s.customWalls, furniture: s.furniture, roomKinds: s.roomKinds, hintOv: s.hintOv, criteria: s.criteria, openings: s.openings, doorState: s.doorState, roomStyle: s.roomStyle } }
-let applying = false, dragPending = false, lastPush = 0
+let applying = false, dragPending = false, lastPush = 0, lastPushKey = ''
 useStore.subscribe((s, prev) => {
   if (applying) return
   if (!prev.drag && s.drag) dragPending = true
+  if (prev.drag && !s.drag) { dragPending = false; lastPush = 0; lastPushKey = '' }
   if (!s.drag) dragPending = false
-  if (!SNAP_KEYS.some((k) => s[k] !== prev[k])) return
-  if (s.drag) { if (!dragPending) return; dragPending = false }
-  else {
-    const onlyFurn = SNAP_KEYS.every((k) => k === 'furniture' || s[k] === prev[k]) && s.furniture.length === prev.furniture.length
-    if (onlyFurn && Date.now() - lastPush < 500) { lastPush = Date.now(); return }
+  const changed = SNAP_KEYS.filter((k) => s[k] !== prev[k])
+  if (!changed.length) return
+  const key = changed.length === 1 ? changed[0] : ''
+  if (s.drag) {
+    if (!dragPending) return
+    dragPending = false
+  } else {
+    const now = Date.now()
+    const mergeFurn = key === 'furniture' && s.furniture.length === prev.furniture.length
+    const mergeOpen = key === 'openings' && Object.values(s.openings).reduce((a, b) => a + b.length, 0) === Object.values(prev.openings).reduce((a, b) => a + b.length, 0)
+    if ((mergeFurn || mergeOpen) && lastPushKey === key && now - lastPush < 400) {
+      lastPush = now
+      return
+    }
   }
   lastPush = Date.now()
+  lastPushKey = s.drag ? '' : key
+  applying = true
   useStore.setState((st) => ({ past: [...st.past.slice(-99), snapOf(prev)], future: [] }))
+  applying = false
 })
 
 const SAVE_KEYS = ['flatId', 'nodes', 'furniture', 'customWalls', 'roomKinds', 'hintOv', 'criteria', 'openings', 'doorState', 'roomStyle', 'lightOv', 'versions', 'activeVer', 'stage'] as const

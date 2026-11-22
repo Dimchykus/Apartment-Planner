@@ -242,7 +242,6 @@ export default function App() {
         {view2d && <View2D key={flatId} cx={cx} cz={cz} w={fw} h={fh} />}
         {wallView && <WallView key={wallView.label} w={wallView} />}
         {ortho && !view2d && !wallView && !walk && !fly && <OrbitOrtho key={flatId} cx={cx} cz={cz} w={fw} h={fh} />}
-        <Keys />
         <CameraRig cx={cx} cz={cz} k={flatId} off={view2d} still={walk || fly} />
         <ViewShift />
         {q !== 'low' && (
@@ -258,6 +257,7 @@ export default function App() {
       {walk && !isTouch && <><div className="cross" /><div className="cross-hint">E: open door · use switch</div></>}
       {showFps && <div id="fps-meter" style={{ position: 'fixed', left: 10, bottom: 10, zIndex: 30, padding: '3px 8px', borderRadius: 8, background: 'rgba(0,0,0,.6)', color: '#7CFC9A', font: '600 12px monospace', pointerEvents: 'none' }}>…</div>}
       <McpHost />
+      <Keys />
       <TopBar />
       <Sidebar />
       <ToolPanel />

@@ -587,9 +587,11 @@ export function Keys() {
       const s = useStore.getState()
       const t = e.target as HTMLElement | null
       const typing = t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && ['text', 'number', 'search'].includes(t.type))
-      if ((e.ctrlKey || e.metaKey) && !typing) {
-        if (e.code === 'KeyZ' && !e.shiftKey) { e.preventDefault(); s.undo(); return }
-        if (e.code === 'KeyY' || (e.code === 'KeyZ' && e.shiftKey)) { e.preventDefault(); s.redo(); return }
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !typing) {
+        const isZ = e.code === 'KeyZ' || e.key.toLowerCase() === 'z'
+        const isY = e.code === 'KeyY' || e.key.toLowerCase() === 'y'
+        if (isZ && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); s.undo(); return }
+        if (isY || (isZ && e.shiftKey)) { e.preventDefault(); e.stopPropagation(); s.redo(); return }
       }
       if (s.mode === 'walls') {
         if (e.key === 'Escape') { if (s.selOpening) s.selectOpening(null); else if (s.drawStart) s.setDrawStart(null); else s.setTool('move') }
@@ -618,8 +620,8 @@ export function Keys() {
       else if (e.code === 'KeyQ') s.patchFurn(f.id, { rot: f.rot - Math.PI / 12 })
       else if (e.code === 'KeyE') s.patchFurn(f.id, { rot: f.rot + Math.PI / 12 })
     }
-    addEventListener('keydown', h)
-    return () => removeEventListener('keydown', h)
+    window.addEventListener('keydown', h, true)
+    return () => window.removeEventListener('keydown', h, true)
   }, [])
   return null
 }
