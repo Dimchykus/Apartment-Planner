@@ -31,7 +31,8 @@ function View2D({ cx, cz, w, h }: { cx: number; cz: number; w: number; h: number
 function CameraRig({ cx, cz, k, off, still }: { cx: number; cz: number; k: string; off: boolean; still: boolean }) {
   const camera = useThree((s) => s.camera)
   const top = useStore((s) => s.topView)
-  useEffect(() => { if (!off && !still) { camera.position.set(cx + 6, 9, cz + 9); camera.lookAt(cx, 0, cz) } }, [k, off]) // eslint-disable-line react-hooks/exhaustive-deps
+  // also runs when the camera object itself is swapped (leaving the 2D / wall view), so the 3D view never keeps a top-down position
+  useEffect(() => { if (!off && !still) { camera.position.set(cx + 6, 9, cz + 9); camera.up.set(0, 1, 0); camera.lookAt(cx, 0, cz) } }, [k, off, camera]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (top) { camera.position.set(cx, off ? 40 : 16, cz + 0.001); camera.lookAt(cx, 0, cz) } }, [top]) // eslint-disable-line react-hooks/exhaustive-deps
   return null
 }
@@ -61,6 +62,13 @@ function DebugHook() {
   const three = useThree()
   useEffect(() => { const w = window as unknown as { __planner?: Record<string, unknown> }; if (new URLSearchParams(location.search).has('debug') || import.meta.env.DEV) w.__planner = { ...(w.__planner ?? {}), three } }, [three])
   return null
+}
+
+/** Orbit view with an orthographic camera: same angle as the perspective view, but parallel lines stay parallel. */
+function OrbitOrtho({ cx, cz, w, h }: { cx: number; cz: number; w: number; h: number }) {
+  const size = useThree((s) => s.size)
+  const zoom = Math.min(size.width / (w * 1.5), size.height / (h * 1.5))
+  return <OrthographicCamera makeDefault position={[cx + 6, 9, cz + 9]} zoom={zoom} near={0.1} far={400} onUpdate={(c) => c.lookAt(cx, 0, cz)} />
 }
 
 /** Elevation view: orthographic camera facing one wall straight on (for aligning things on that wall). */
@@ -151,12 +159,13 @@ export default function App() {
           ? <Walker />
           : fly
           ? <Flyer />
-          : <OrbitControls key={s.flatId + view2d + (wallView?.label ?? '')} makeDefault enabled={!s.drag && !tracerOpen} target={wallView ? [(wallView.a[0] + wallView.b[0]) / 2, 1.35, (wallView.a[1] + wallView.b[1]) / 2] : [cx, 0, cz]} maxPolarAngle={Math.PI / 2.02}
+          : <OrbitControls key={s.flatId + view2d + (wallView?.label ?? '') + u.ortho} makeDefault enabled={!s.drag && !tracerOpen} target={wallView ? [(wallView.a[0] + wallView.b[0]) / 2, 1.35, (wallView.a[1] + wallView.b[1]) / 2] : [cx, 0, cz]} maxPolarAngle={Math.PI / 2.02}
               enableRotate={!view2d && !wallView} screenSpacePanning
               mouseButtons={view2d ? { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN } : undefined}
               touches={view2d ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN } : undefined} />}
         {view2d && <View2D key={s.flatId} cx={cx} cz={cz} w={fw} h={fh} />}
         {wallView && <WallView key={wallView.label} w={wallView} />}
+        {u.ortho && !view2d && !wallView && !walk && !fly && <OrbitOrtho key={s.flatId} cx={cx} cz={cz} w={fw} h={fh} />}
         <Keys />
         <CameraRig cx={cx} cz={cz} k={s.flatId} off={view2d} still={walk || fly} />
         <ViewShift />

@@ -26,6 +26,8 @@ type UI = {
   on2d: boolean
   overlay: boolean
   ceiling2d: boolean
+  ortho: boolean                  // Orbit view with an orthographic camera (no perspective distortion)
+  setOrtho: (v: boolean) => void
   wallView: { a: [number, number]; b: [number, number]; n: [number, number]; label: string } | null // elevation view of one wall (metres)
   setWallView: (w: UI['wallView']) => void
   rulesOnCriteria: boolean
@@ -67,6 +69,8 @@ export const useUI = create<UI>((set, get) => ({
   on2d: false,
   overlay: false,
   ceiling2d: false,
+  ortho: false,
+  setOrtho: (ortho) => set({ ortho }),
   wallView: null,
   setWallView: (wallView) => set({ wallView }),
   rulesOnCriteria: saved.rulesOnCriteria ?? false,

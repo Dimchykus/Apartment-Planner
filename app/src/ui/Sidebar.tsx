@@ -34,6 +34,17 @@ const MODE_TITLES: Record<string, [string, string]> = {
   move: ['Move items', 'move'], rooms: ['Rooms & zones', 'rooms'], dims: ['Dimensions', 'ruler'], style: ['Walls & floors', 'palette'], openings: ['Doors & windows', 'door'],
 }
 
+/** Perspective / orthographic camera for the Orbit view. */
+function ProjectionSwitch() {
+  const u = useUI()
+  return (
+    <div className="seg" role="group" aria-label="Camera">
+      <button className={!u.ortho ? 'on' : ''} onClick={() => u.setOrtho(false)} title="Natural 3D view with perspective">Perspective</button>
+      <button className={u.ortho ? 'on' : ''} onClick={() => u.setOrtho(true)} title="Parallel lines stay parallel: good for measuring and aligning">Orthographic</button>
+    </div>
+  )
+}
+
 /** Top-down plan view, or an elevation view of one wall: handy for lining things up. */
 function ViewTools() {
   const s = useStore()
@@ -65,7 +76,7 @@ function ModePanel() {
   const mode = s.mode
   const touch = isTouch
   const tip = (t: React.ReactNode) => <p className="hint">{t}</p>
-  if (mode === 'view') return tip(<>{on2d ? 'Top-down plan. ' : ''}{touch ? 'One finger turns, two zoom.' : 'Drag = turn · right-drag = move · wheel = zoom.'}</>)
+  if (mode === 'view') return (<>{!on2d && <ProjectionSwitch />}{tip(<>{on2d ? 'Top-down plan. ' : ''}{touch ? 'One finger turns, two zoom.' : 'Drag = turn · right-drag = move · wheel = zoom.'}</>)}</>)
   if (mode === 'walk') return tip(touch ? 'Stick = walk, drag = look.' : <>Click to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run · <kbd>E</kbd> use · <kbd>Esc</kbd> release.</>)
   if (mode === 'fly') return tip(touch ? 'Stick = fly, ▲▼ = up / down.' : <>Click to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly · <kbd>Space</kbd>/<kbd>C</kbd> up / down · wheel = speed.</>)
   if (mode === 'dims') return tip('Lengths in cm. Blue = clear wall length, grey = thickness, brown / teal = doors / windows.')
@@ -81,6 +92,7 @@ function ModePanel() {
       <button className="btn" disabled={!sel} onClick={() => sel && startCarry(sel.id)} title="Enter">Pick up (Enter) · click or Enter drops · Esc cancels</button>
     </div>
     <ViewTools />
+    {!useUI.getState().on2d && !useUI.getState().wallView && <ProjectionSwitch />}
     {tip(<>Drag an item · pink lines = aligned with another item · <kbd>R</kbd> turn · <kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd> lock axis · <kbd>Ctrl</kbd>+<kbd>D</kbd> copy</>)}
     {sel && <FurnPanel sel={sel} />}
   </>)
@@ -155,6 +167,8 @@ function Scene() {
     <label className="row">Time of day
       <select value={u.env} onChange={(e) => u.setEnv(e.target.value as typeof u.env)}>{ENVS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}</select>
     </label>
+    <div className="lbl-row"><span>Orbit camera</span></div>
+    <ProjectionSwitch />
     <label className="row">Graphics
       <select value={u.quality} onChange={(e) => u.setQuality(e.target.value as typeof u.quality)}>
         <option value="low">Fast (phones, old PCs)</option><option value="med">Balanced</option><option value="high">Best looking</option>
