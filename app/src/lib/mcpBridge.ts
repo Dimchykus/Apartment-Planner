@@ -3,7 +3,7 @@
 import { useStore } from '../store'
 import { useUI } from '../ui/uiStore'
 import { CATALOG, sizeOf, type FType, type Furn } from '../catalog'
-import { rooms, walls as baseWalls, insetRoom, roomAreas, openingsOf, m, PX_PER_M, type Pt } from '../plan'
+import { rooms, walls as baseWalls, editable, insetRoom, roomAreas, openingsOf, m, PX_PER_M, type Pt } from '../plan'
 import { kindInfo, ROOM_KINDS } from '../roomkinds'
 import { misplacedReason, defaultKind } from '../autofurnish'
 
@@ -64,15 +64,109 @@ async function shot(view: string): Promise<string> {
   return d
 }
 
+
+// ───────────── walls ─────────────
+const allWalls = () => [...baseWalls, ...S().customWalls]
+const nodeM = (id: string): Pt => { const p = S().nodes[id]; return [m(p[0]), m(p[1])] }
+const wallById = (id: string) => { const w = allWalls().find((x) => x.id === id); if (!w) throw new Error('No wall "' + id + '". Use get_walls.'); return w }
+const roomWallIds = (r: (typeof rooms)[number]) => r.nodes.map((a, i) => { const b = r.nodes[(i + 1) % r.nodes.length]; return allWalls().find((w) => (w.a === a && w.b === b) || (w.a === b && w.b === a))?.id ?? null })
+const isLocked = (id: string) => id[0] !== 'c' && !editable[id]
+const moveKind = (id: string) => (id[0] === 'c' ? 'free' : editable[id]?.type ?? 'locked')
+const areaOf = (room: string) => roomAreas(S().nodes, S().customWalls).find((x) => x.room.id === room)?.area ?? 0
+const allAreas = () => Object.fromEntries(roomAreas(S().nodes, S().customWalls).map((x) => [x.room.id, r2(x.area)]))
+
+
+/** How far a wall can be pushed sideways (metres, along its unit normal [nx, nz]): intersection of what its two ends allow. */
+function sidewaysRange(id: string): { normal: Pt; min: number; max: number } {
+  const w = wallById(id), A = nodeM(w.a), B = nodeM(w.b), L = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1
+  const n: Pt = [-(B[1] - A[1]) / L, (B[0] - A[0]) / L]
+  if (w.custom) return { normal: n, min: -20, max: 20 }
+  let lo = -Infinity, hi = Infinity
+  for (const nodeId of [w.a, w.b]) {
+    const e = editable[nodeId], p = nodeM(nodeId)
+    let a = 0, b = 0
+    if (e?.type === 'free') {
+      const box = [m(e.box[0]), m(e.box[1]), m(e.box[2]), m(e.box[3])]
+      a = -Infinity; b = Infinity
+      for (const k of [0, 1] as const) if (Math.abs(n[k]) > 1e-6) { const t1 = ((k ? box[1] : box[0]) - p[k]) / n[k], t2 = ((k ? box[3] : box[2]) - p[k]) / n[k]; a = Math.max(a, Math.min(t1, t2)); b = Math.min(b, Math.max(t1, t2)) }
+    } else if (e?.type === 'slide') {
+      const P = nodeM(e.a), Q = nodeM(e.b), d: Pt = [Q[0] - P[0], Q[1] - P[1]], ll = Math.hypot(d[0], d[1]) || 1, u: Pt = [d[0] / ll, d[1] / ll]
+      const along = n[0] * u[0] + n[1] * u[1]
+      if (Math.abs(Math.abs(along) - 1) < 0.05) { // the wall's normal runs along the outer wall: it can slide
+        const t = (p[0] - P[0]) * u[0] + (p[1] - P[1]) * u[1], mg = m(e.margin)
+        const t1 = (mg - t) / along, t2 = (ll - mg - t) / along
+        a = Math.min(t1, t2); b = Math.max(t1, t2)
+      }
+    }
+    lo = Math.max(lo, a); hi = Math.min(hi, b)
+  }
+  return { normal: n, min: r2(Math.min(0, lo)), max: r2(Math.max(0, hi)) }
+}
+
+/** Move both ends of a wall by (dx, dz) metres. Locked (outer) corners do not move; sliding corners stay on their outer wall. */
+function shiftWall(id: string, dx: number, dz: number) {
+  const w = wallById(id), before = [nodeM(w.a), nodeM(w.b)]
+  if (w.custom) { const [ax, az] = before[0], [bx, bz] = before[1]; S().moveWall(id, (ax + bx) / 2 + dx, (az + bz) / 2 + dz) }
+  else for (const [n, p] of [[w.a, before[0]], [w.b, before[1]]] as [string, Pt][]) S().moveNode(n, p[0] + dx, p[1] + dz)
+  const after = [nodeM(w.a), nodeM(w.b)]
+  return { wall: id, requested: { dx: r2(dx), dz: r2(dz) }, moved: after.map((p, i) => ({ node: i ? w.b : w.a, dx: r2(p[0] - before[i][0]), dz: r2(p[1] - before[i][1]) })) }
+}
+
 const ops: Record<string, (a: Args) => unknown | Promise<unknown>> = {
   get_flat: () => {
     const s = S(), areas = roomAreas(s.nodes, s.customWalls)
     return {
       flat: s.flatId, units: 'metres; x grows to the east (right on the plan), z grows to the south (down on the plan)',
-      rooms: rooms.map((r) => { const p = roomPoly(r.id)!, b = bbox(p); return { id: r.id, name: roomName(r.id), kind: s.roomKinds[r.id] ?? defaultKind(r), area_m2: r2(areas.find((x) => x.room.id === r.id)?.area ?? 0), inside_bounds: { x_from: r2(b.x0), x_to: r2(b.x1), z_from: r2(b.z0), z_to: r2(b.z1) }, polygon: p.map(([x, z]) => [r2(x), r2(z)]) } }),
+      rooms: rooms.map((r) => { const p = roomPoly(r.id)!, b = bbox(p); return { id: r.id, name: roomName(r.id), kind: s.roomKinds[r.id] ?? defaultKind(r), area_m2: r2(areas.find((x) => x.room.id === r.id)?.area ?? 0), stated_m2: r.stated || undefined, wall_ids: roomWallIds(r), inside_bounds: { x_from: r2(b.x0), x_to: r2(b.x1), z_from: r2(b.z0), z_to: r2(b.z1) }, polygon: p.map(([x, z]) => [r2(x), r2(z)]) } }),
       doors_and_windows: [...baseWalls, ...s.customWalls].flatMap((w) => { const A = s.nodes[w.a], B = s.nodes[w.b], L = Math.hypot(B[0] - A[0], B[1] - A[1]); return openingsOf(w, s.nodes).map((o) => { const t = (o.from + o.to) / 2 / L; return { kind: o.kind, wall: w.id, x: r2(m(A[0] + (B[0] - A[0]) * t)), z: r2(m(A[1] + (B[1] - A[1]) * t)), width: r2((o.to - o.from) / PX_PER_M), sill: o.sill, top: o.top } }) }),
       furniture_count: s.furniture.length, furniture_types: Object.entries(CATALOG).map(([k, v]) => ({ type: k, label: v.label, width: v.w, depth: v.d, height: v.h })), room_kinds: ROOM_KINDS.map((k) => k.id),
     }
+  },
+
+  get_walls: () => {
+    const s = S()
+    const roomsOf = (wid: string) => rooms.filter((r) => roomWallIds(r).includes(wid)).map((r) => r.id)
+    return {
+      units: 'metres. Only inner walls can move: outer-wall corners are locked. "free" corners move anywhere inside box; "slide" corners move along the outer wall between two other corners.',
+      nodes: Object.keys(s.nodes).map((id) => { const e = editable[id], p = nodeM(id); const o: Record<string, unknown> = { id, x: r2(p[0]), z: r2(p[1]), move: moveKind(id) }; if (e?.type === 'free') o.box = { x_from: r2(m(e.box[0])), x_to: r2(m(e.box[2])), z_from: r2(m(e.box[1])), z_to: r2(m(e.box[3])) }; if (e?.type === 'slide') o.slides_between = [e.a, e.b]; return o }),
+      walls: allWalls().map((w) => { const A = nodeM(w.a), B = nodeM(w.b); const dx = B[0] - A[0], dz = B[1] - A[1]; return { id: w.id, a: w.a, b: w.b, thickness_cm: Math.round((w.thick / PX_PER_M) * 100), length_m: r2(Math.hypot(dx, dz)), direction: Math.abs(dz) < 0.02 ? 'horizontal (runs east-west)' : Math.abs(dx) < 0.02 ? 'vertical (runs north-south)' : 'diagonal', ...(() => { const sw = sidewaysRange(w.id); return { can_move: sw.max - sw.min > 0.02, sideways: { normal_x_z: [r2(sw.normal[0]), r2(sw.normal[1])], min_m: sw.min, max_m: sw.max } } })(), custom: !!w.custom, doorway: !!w.door, rooms: roomsOf(w.id) } }),
+    }
+  },
+  move_node: (a) => {
+    const id = str(a.id)!, x = num(a.x), z = num(a.z)
+    if (!S().nodes[id]) throw new Error('No corner "' + id + '". Use get_walls.')
+    if (x === undefined || z === undefined) throw new Error('Give x and z.')
+    const b = nodeM(id); S().moveNode(id, x, z); const p = nodeM(id)
+    return { node: id, requested: [x, z], now: [r2(p[0]), r2(p[1])], moved: Math.hypot(p[0] - b[0], p[1] - b[1]) > 0.005, locked: isLocked(id), room_areas: allAreas() }
+  },
+  shift_wall: (a) => { const id = str(a.id)!; return { ...shiftWall(id, num(a.dx) ?? 0, num(a.dz) ?? 0), room_areas: allAreas(), furniture_problems: S().furniture.filter((f) => misplacedReason(f, S().nodes, S().customWalls, S().furniture)).length } },
+  resize_room_to_area: (a) => {
+    const room = str(a.room)!, wid = str(a.wall)!, target = num(a.area_m2)
+    const r = rooms.find((x) => x.id === room); if (!r) throw new Error('Unknown room "' + room + '".')
+    if (!target || target < 1) throw new Error('Give area_m2 (net floor area in square metres).')
+    if (!roomWallIds(r).includes(wid)) throw new Error('Wall ' + wid + ' is not one of the walls of that room. Its walls: ' + roomWallIds(r).join(', '))
+    const w = wallById(wid), A = nodeM(w.a), B = nodeM(w.b), L = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1
+    const poly = roomPoly(room)!, c: Pt = [poly.reduce((q, p) => q + p[0], 0) / poly.length, poly.reduce((q, p) => q + p[1], 0) / poly.length]
+    let nx = -(B[1] - A[1]) / L, nz = (B[0] - A[0]) / L // outward normal of the wall (away from the room)
+    if ((((A[0] + B[0]) / 2 - c[0]) * nx + (((A[1] + B[1]) / 2 - c[1]) * nz)) < 0) { nx = -nx; nz = -nz }
+    const mid = () => { const P = nodeM(w.a), Q = nodeM(w.b); return ((P[0] + Q[0]) / 2) * nx + ((P[1] + Q[1]) / 2) * nz }
+    const m0 = mid()
+    const sw = sidewaysRange(wid), side = nx * sw.normal[0] + nz * sw.normal[1] >= 0 ? 1 : -1 // + = outward
+    const room_out = side > 0 ? sw.max : -sw.min // how far outward the wall may still go
+    const room_in = side > 0 ? -sw.min : sw.max
+    if (room_out < 0.02 && room_in < 0.02) throw new Error('Wall ' + wid + ' cannot be pushed sideways (its corners are locked or slide the wrong way). Pick another wall of the room: get_walls shows can_move and the allowed range.')
+    const before = allAreas(), start = before[room] ?? 0
+    const step = Math.min(0.1, Math.max(room_out, room_in) / 2) * (room_out >= room_in ? 1 : -1)
+    const a0 = areaOf(room); shiftWall(wid, nx * step, nz * step)
+    const a1 = areaOf(room), slope = (a1 - a0) / step
+    if (Math.abs(slope) < 0.05) { shiftWall(wid, -nx * step, -nz * step); throw new Error('Moving wall ' + wid + ' does not change the area of ' + room + '. Pick another wall of the room.') }
+    for (let i = 0; i < 3; i++) {
+      const cur = areaOf(room), need = (target - cur) / slope
+      if (Math.abs(target - cur) < 0.03) break
+      shiftWall(wid, nx * need, nz * need) // corners clamp to what the app allows
+    }
+    const after = allAreas(), got = after[room] ?? 0
+    return { room, wall: wid, requested_m2: target, area_before_m2: start, area_now_m2: got, wall_moved_m: Math.abs(r2(mid() - m0)), direction_of_move: (() => { const d = mid() - m0; if (Math.abs(d) < 0.005) return 'none'; return Math.abs(nx) > Math.abs(nz) ? (nx * d > 0 ? 'east' : 'west') : nz * d > 0 ? 'south' : 'north' })(), exact: Math.abs(got - target) < 0.06, room_areas_before: before, room_areas_now: after, furniture_problems: S().furniture.filter((f) => misplacedReason(f, S().nodes, S().customWalls, S().furniture)).length }
   },
   list_furniture: () => S().furniture.map(describe),
   add_furniture: (a) => {
@@ -129,3 +223,5 @@ export function startMcpBridge(onState: (connected: boolean) => void, port = 739
   connect()
   return () => { stopped = true; clearTimeout(timer); ws?.close(); onState(false) }
 }
+
+if (import.meta.env.DEV) (window as unknown as Record<string, unknown>).__mcpOps = ops // for tests
