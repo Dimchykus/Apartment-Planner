@@ -6,7 +6,7 @@ import { m, openingsOf, flat, PX_PER_M } from './plan'
 import { useStore, getAllWalls } from './store'
 import { interactAhead } from './interact'
 import { touchInput } from './ui/touch'
-import { isTouch } from './ui/uiStore'
+import { isTouch, useUI } from './ui/uiStore'
 
 const R = 0.22
 const EYE = 1.65
@@ -124,7 +124,8 @@ export function Flyer() {
     if (mv.lengthSq() === 0) return
     mv.normalize().multiplyScalar(speed.current * (k.ShiftLeft || k.ShiftRight ? 3 : 1) * Math.min(dt, 0.1))
     camera.position.add(mv)
-    camera.position.y = Math.max(-10, Math.min(400, camera.position.y)) // stay above street level
+    const minY = -((useUI.getState().floor - 1) * 3 + 0.3) + 0.5
+    camera.position.y = Math.max(minY, Math.min(400, camera.position.y)) // stay above street level
   })
   return isTouch ? <TouchLook /> : <PointerLockControls makeDefault />
 }

@@ -199,6 +199,13 @@ function Scene() {
     <label className="row">Time of day
       <select value={u.env} onChange={(e) => u.setEnv(e.target.value as typeof u.env)}>{ENVS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}</select>
     </label>
+    <label className="slider">Flat floor: {u.floor} / {u.totalFloors}
+      <input type="range" min={1} max={25} step={1} value={u.floor} onChange={(e) => u.setFloor(+e.target.value)} />
+    </label>
+    <label className="slider">Building floors: {u.totalFloors}
+      <input type="range" min={1} max={25} step={1} value={u.totalFloors} onChange={(e) => u.setTotalFloors(+e.target.value)} />
+    </label>
+    <label className="check"><input type="checkbox" checked={u.parking} onChange={(e) => u.setParking(e.target.checked)} /> Parking &amp; cars around building</label>
     <div className="lbl-row"><span>Orbit camera</span></div>
     <ProjectionSwitch />
     <div className="lbl-row"><span>Graphics mode</span></div>
