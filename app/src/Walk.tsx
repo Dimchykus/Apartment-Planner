@@ -6,7 +6,7 @@ import { m, openingsOf, flat, PX_PER_M } from './plan'
 import { useStore, getAllWalls } from './store'
 import { interactAhead } from './interact'
 import { touchInput } from './ui/touch'
-import { isTouch } from './ui/uiStore'
+import { isTouch, useUI } from './ui/uiStore'
 
 const R = 0.22
 const EYE = 1.65
@@ -14,20 +14,18 @@ const EYE = 1.65
 function blocked(x: number, z: number) {
   const nodes = useStore.getState().nodes
   for (const w of getAllWalls()) {
-    // skip openings that are doors/windows? doors yes (walk through), windows block
     const A = nodes[w.a], Bn = nodes[w.b]
+    if (!A || !Bn) continue
     const ax = m(A[0]), az = m(A[1]), bx = m(Bn[0]), bz = m(Bn[1])
     const dx = bx - ax, dz = bz - az
     const L2 = dx * dx + dz * dz
-    let t = ((x - ax) * dx + (z - az) * dz) / L2
-    const len = Math.sqrt(L2)
+    if (L2 < 1e-6) continue
+    const t = ((x - ax) * dx + (z - az) * dz) / L2
     const cl = Math.max(0, Math.min(1, t))
     const px = ax + dx * cl, pz = az + dz * cl
     if (Math.hypot(x - px, z - pz) < m(w.thick) / 2 + R) {
-      // allow walking through door openings
-      const along = (t * len) / m(1) // px along wall
+      // allow walking through open / half-open door openings
       const pxAlong = t * Math.sqrt((Bn[0] - A[0]) ** 2 + (Bn[1] - A[1]) ** 2)
-      void along
       const dst = useStore.getState().doorState
       if (openingsOf(w, nodes).some((o) => o.kind === 'door' && (dst[w.id + ':' + (o.i ?? 0)]?.state ?? (w.thick / PX_PER_M >= 0.21 ? 0 : 1)) !== 0 && pxAlong > o.from + 6 && pxAlong < o.to - 6)) continue // closed doors stop you
       return true
@@ -41,27 +39,39 @@ export function Walker() {
   const keys = useRef<Record<string, boolean>>({})
   useEffect(() => {
     const [sx, sy] = flat.start.pos, [lx, ly] = flat.start.look
+    camera.up.set(0, 1, 0)
     camera.position.set(m(sx), EYE, m(sy))
     camera.lookAt(m(lx), EYE, m(ly))
     const d = (e: KeyboardEvent) => { keys.current[e.code] = true; if (e.code === 'KeyE') interactAhead(camera, scene) }
     const u = (e: KeyboardEvent) => (keys.current[e.code] = false)
-    addEventListener('keydown', d); addEventListener('keyup', u)
-    return () => { removeEventListener('keydown', d); removeEventListener('keyup', u) }
+    const blur = () => { keys.current = {} }
+    addEventListener('keydown', d); addEventListener('keyup', u); addEventListener('blur', blur)
+    return () => { removeEventListener('keydown', d); removeEventListener('keyup', u); removeEventListener('blur', blur) }
   }, [camera, scene])
 
   useFrame((_, dt) => {
+    const p = camera.position
+    p.y = EYE
     const k = keys.current
-    const speed = (k.ShiftLeft ? 3.2 : 1.6) * dt
     const f = (k.KeyW || k.ArrowUp ? 1 : 0) - (k.KeyS || k.ArrowDown ? 1 : 0) + touchInput.y
     const s = (k.KeyD || k.ArrowRight ? 1 : 0) - (k.KeyA || k.ArrowLeft ? 1 : 0) + touchInput.x
     if (Math.abs(f) < 0.05 && Math.abs(s) < 0.05) return
     const dir = new THREE.Vector3()
-    camera.getWorldDirection(dir); dir.y = 0; dir.normalize()
+    camera.getWorldDirection(dir); dir.y = 0
+    if (dir.lengthSq() < 1e-6) return
+    dir.normalize()
     const right = new THREE.Vector3().crossVectors(dir, camera.up).normalize()
-    const mv = dir.multiplyScalar(f).add(right.multiplyScalar(s)).normalize().multiplyScalar(speed)
-    const p = camera.position
-    if (!blocked(p.x + mv.x, p.z)) p.x += mv.x
-    if (!blocked(p.x, p.z + mv.z)) p.z += mv.z
+    const total = (k.ShiftLeft || k.ShiftRight ? 3.2 : 1.6) * Math.min(dt, 0.05)
+    const mv = dir.multiplyScalar(f).add(right.multiplyScalar(s))
+    if (mv.lengthSq() < 1e-6) return
+    mv.normalize().multiplyScalar(total)
+    // Sub-step so wall collisions can never be tunneled through on slow frames
+    const steps = Math.max(1, Math.ceil(total / 0.06))
+    const sx = mv.x / steps, sz = mv.z / steps
+    for (let i = 0; i < steps; i++) {
+      if (!blocked(p.x + sx, p.z)) p.x += sx
+      if (!blocked(p.x, p.z + sz)) p.z += sz
+    }
     p.y = EYE
   })
   return isTouch ? <TouchLook /> : <PointerLockControls makeDefault />
@@ -114,7 +124,8 @@ export function Flyer() {
     if (mv.lengthSq() === 0) return
     mv.normalize().multiplyScalar(speed.current * (k.ShiftLeft || k.ShiftRight ? 3 : 1) * Math.min(dt, 0.1))
     camera.position.add(mv)
-    camera.position.y = Math.max(-10, Math.min(400, camera.position.y)) // stay above street level
+    const minY = -((useUI.getState().floor - 1) * 3 + 0.3) + 0.5
+    camera.position.y = Math.max(minY, Math.min(400, camera.position.y)) // stay above street level
   })
   return isTouch ? <TouchLook /> : <PointerLockControls makeDefault />
 }

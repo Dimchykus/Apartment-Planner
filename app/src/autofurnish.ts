@@ -1,7 +1,7 @@
 // Rule-based furnishing. Everything works in metres on the *clear* room outline (wall thickness already removed),
 // so nothing can end up inside a wall. Items shrink step by step (sizes lists) until they fit.
-import { rooms, walls as baseWalls, insetRoom, openingsOf, areaM2, flat, PX_PER_M, type Pt, type Wall, type Room } from './plan'
-import { CATALOG, PRESETS, sizeOf, type FType, type Furn } from './catalog'
+import { rooms, walls as baseWalls, insetRoom, openingsOf, areaM2, flat, PX_PER_M, doorSwing, type Pt, type Wall, type Room, type Opening } from './plan'
+import { CATALOG, PRESETS, sizeOf, partBoxes, type FType, type Furn } from './catalog'
 import { DEFAULT_CRITERIA, type Criteria } from './criteria'
 
 type V = [number, number]
@@ -70,6 +70,18 @@ const pull = (c: { x: number; z: number }, h?: V, t?: FType) => (h ? -dist([c.x,
 const mk = (x: number, z: number, rot: number, w: number, d: number): OBB => ({
   c: [x, z], ax: [Math.cos(rot), -Math.sin(rot)], az: [Math.sin(rot), Math.cos(rot)], hx: w / 2, hz: d / 2,
 })
+/** World-space OBB parts for a furniture item (2 sub-boxes for L-shaped items, 1 for rectangular items). */
+const obbsOf = (f: Furn): OBB[] => {
+  const ux = Math.cos(f.rot), uz = -Math.sin(f.rot)
+  const vx = Math.sin(f.rot), vz = Math.cos(f.rot)
+  return partBoxes(f).map((b) => ({
+    c: [f.x + ux * b.lx + vx * b.lz, f.z + uz * b.lx + vz * b.lz],
+    ax: [ux, uz],
+    az: [vx, vz],
+    hx: b.w / 2,
+    hz: b.d / 2,
+  }))
+}
 const corners = (o: OBB): V[] => ([[-1, -1], [1, -1], [1, 1], [-1, 1]] as V[]).map(([a, b]) => [
   o.c[0] + o.ax[0] * o.hx * a + o.az[0] * o.hz * b, o.c[1] + o.ax[1] * o.hx * a + o.az[1] * o.hz * b,
 ])
@@ -109,8 +121,16 @@ export function zones(all: Wall[], nodes: Record<string, Pt>) {
       const a = (o.end === 'b' ? L * PX_PER_M - o.to : o.from) / PX_PER_M
       const b = (o.end === 'b' ? L * PX_PER_M - o.from : o.to) / PX_PER_M
       if (o.kind === 'door') {
-        doors.push(box(a - 0.05, b + 0.05, 0.85))
-        if (w.thick / PX_PER_M >= 0.21) entrances.push(doors[doors.length - 1].c) // door in an exterior-thickness wall = flat entrance
+        // Account for actual door opening side: full leaf swing on the swing side, minimal threshold clearance on the other side
+        const sg = doorSwing(w, o, nodes)
+        const ht = w.thick / PX_PER_M / 2
+        const swingDepth = Math.max(0.55, Math.min(0.95, b - a))
+        const backClear = 0.05
+        const mid = (a + b) / 2
+        const off = sg * (swingDepth - backClear) / 2
+        const hz = ht + (swingDepth + backClear) / 2
+        doors.push({ c: [A[0] + u[0] * mid + v[0] * off, A[1] + u[1] * mid + v[1] * off], ax: u, az: v, hx: (b - a) / 2 + 0.05, hz })
+        if (w.thick / PX_PER_M >= 0.21) entrances.push([A[0] + u[0] * mid, A[1] + u[1] * mid]) // door in an exterior-thickness wall = flat entrance
       }
       else windows.push(box(a, b, 0.3))
     }
@@ -797,29 +817,31 @@ export function inRoom(f: Furn, roomId: string, nodes: Record<string, Pt>): bool
 
 /** Why a piece of furniture is a problem (null = fine): outside the rooms, through a wall, in front of a window / door, overlapping another item. */
 export function misplacedReason(f: Furn, nodes: Record<string, Pt>, customWalls: Wall[], others: Furn[] = []): string | null {
-  const { w, d, h } = sizeOf(f)
+  const { h } = sizeOf(f)
   const y0 = f.y ?? 0
-  const o = mk(f.x, f.z, f.rot, w, d)
-  const cs = corners(o)
+  const os = obbsOf(f)
+  const cs = os.flatMap(corners)
   const fits = rooms.some((r) => {
     const poly = insetRoom(r, nodes).map(toM)
     return cs.every((c) => inPoly(c, poly))
   })
   if (!fits) return 'sticks out of the room / into a wall'
   const z = zones([...baseWalls, ...customWalls], nodes)
-  if (z.custom.some((q) => overlaps(o, q))) return 'goes through a wall you added'
-  if (y0 < 2.0 && z.doors.some((q) => overlaps(o, q))) return 'blocks a door'
-  if (y0 + h > 1.2 && f.type !== 'shower' && !(f.type === 'kitchen' && f.low) && z.windows.some((q) => overlaps(o, q))) return 'stands in front of a window'
+  if (z.custom.some((q) => os.some((o) => overlaps(o, q)))) return 'goes through a wall you added'
+  if (y0 < 2.0 && f.type !== 'rug' && z.doors.some((q) => os.some((o) => overlaps(o, q)))) return 'blocks a door'
+  if (y0 + h > 1.2 && f.type !== 'shower' && f.type !== 'rug' && !(f.type === 'kitchen' && f.low) && z.windows.some((q) => os.some((o) => overlaps(o, q)))) return 'stands in front of a window'
   for (const g of others) {
     if (g.id === f.id) continue
+    if (f.type === 'rug' || g.type === 'rug') continue
     if ((f.type === 'chair' && g.type === 'diningTable') || (g.type === 'chair' && f.type === 'diningTable')) continue
     const gs = sizeOf(g), gy = g.y ?? 0
     if (y0 >= gy + gs.h - 0.02 || gy >= y0 + h - 0.02) continue // stacked / mounted at different heights
-    if (overlaps(o, mk(g.x, g.z, g.rot, gs.w, gs.d), -0.01)) return 'overlaps ' + CATALOG[g.type].label.toLowerCase()
+    const gos = obbsOf(g)
+    if (os.some((o) => gos.some((go) => overlaps(o, go, -0.01)))) return 'overlaps ' + CATALOG[g.type].label.toLowerCase()
   }
   // dependants only make sense next to what they belong to
   if (f.type === 'chair') {
-    const near = nearest(f, others.filter((g) => g.type === 'diningTable' || g.type === 'desk'))
+    const near = nearest(f, others.filter((g) => g.type === 'diningTable' || g.type === 'desk' || g.type === 'cornerDesk'))
     if (!near || near.d > 0.5) return 'a chair with no table or desk'
     if (near.face < 0.3) return 'a chair that does not face its table'
   }
@@ -844,74 +866,219 @@ function nearest(f: Furn, list: Furn[]): { g: Furn; d: number; face: number } | 
 }
 export const misplaced = (f: Furn, nodes: Record<string, Pt>, customWalls: Wall[], others: Furn[] = []) => misplacedReason(f, nodes, customWalls, others) !== null
 
-/** A chair that lost its table: put it back at the nearest table / desk, on a free side, facing it. */
-function tuckChair(f: Furn, others: Furn[], nodes: Record<string, Pt>, customWalls: Wall[]): Furn | null {
-  const all = [...baseWalls, ...customWalls], z = zones(all, nodes)
-  const tables = others.filter((g) => g.type === 'diningTable' || g.type === 'desk').sort((a, b) => dist([a.x, a.z], [f.x, f.z]) - dist([b.x, b.z], [f.x, f.z]))
-  for (const t of tables) {
-    const room = rooms.find((r) => inPoly([t.x, t.z], insetRoom(r, nodes).map(toM)))
-    if (!room) continue
-    const ctx = makeCtx(room, nodes, all, z)
-    for (const g of others) {
-      if (g.id === f.id || g.type === 'diningTable' || g.type === 'desk' || (g.y ?? 0) > 0.3) continue
-      const s = sizeOf(g)
-      ctx.placed.push({ o: mk(g.x, g.z, g.rot, s.w, s.d), h: s.h })
-    }
-    const s = sizeOf(t), o = mk(t.x, t.z, t.rot, s.w, s.d)
-    const spots: V[] = []
-    for (const side of [1, -1]) for (const ps of [0, -s.w / 4, s.w / 4, -s.w / 3, s.w / 3]) spots.push([o.c[0] + o.ax[0] * ps + o.az[0] * side * (s.d / 2 + 0.2), o.c[1] + o.ax[1] * ps + o.az[1] * side * (s.d / 2 + 0.2)])
-    for (const side of [1, -1]) spots.push([o.c[0] + o.ax[0] * side * (s.w / 2 + 0.2), o.c[1] + o.ax[1] * side * (s.w / 2 + 0.2)])
-    for (const [x, zz] of spots) {
-      const rot = Math.atan2(t.x - x, t.z - zz)
-      const taken = others.some((g) => g.type === 'chair' && g.id !== f.id && dist([g.x, g.z], [x, zz]) < 0.4)
-      if (!taken && valid(ctx, mk(x, zz, rot, 0.45, 0.5), 0.9)) return { ...f, x, z: zz, rot, group: t.id }
+/** If an item blocks a door's swing zone, return that door's wall, opening, and state key. */
+export function blockingDoor(f: Furn, nodes: Record<string, Pt>, customWalls: Wall[]): { wall: Wall; opening: Opening; key: string } | null {
+  if ((f.y ?? 0) >= 2.0 || f.type === 'rug') return null
+  const os = obbsOf(f)
+  for (const wall of [...baseWalls, ...customWalls]) {
+    const A = toM(nodes[wall.a]), B = toM(nodes[wall.b]), L = dist(A, B)
+    if (L < 0.01) continue
+    const u: V = [(B[0] - A[0]) / L, (B[1] - A[1]) / L], v: V = [-u[1], u[0]]
+    const ht = wall.thick / PX_PER_M / 2
+    for (const o of openingsOf(wall, nodes)) {
+      if (o.kind !== 'door') continue
+      const a = (o.end === 'b' ? L * PX_PER_M - o.to : o.from) / PX_PER_M
+      const b = (o.end === 'b' ? L * PX_PER_M - o.from : o.to) / PX_PER_M
+      const sg = doorSwing(wall, o, nodes)
+      const swingDepth = Math.max(0.55, Math.min(0.95, b - a)), backClear = 0.05
+      const mid = (a + b) / 2, off = sg * (swingDepth - backClear) / 2, hz = ht + (swingDepth + backClear) / 2
+      const box: OBB = { c: [A[0] + u[0] * mid + v[0] * off, A[1] + u[1] * mid + v[1] * off], ax: u, az: v, hx: (b - a) / 2 + 0.05, hz }
+      if (os.some((fo) => overlaps(fo, box))) return { wall, opening: o, key: wall.id + ':' + (o.i ?? 0) }
     }
   }
   return null
 }
 
-/** Move / shrink a piece of furniture to the nearest spot where it fits. Returns null when nothing fits. */
-export function fitFurn(f: Furn, others: Furn[], nodes: Record<string, Pt>, customWalls: Wall[]): Furn | null {
-  if (f.type === 'shelf' || f.type === 'tv') return null
-  if (f.type === 'chair') return tuckChair(f, others, nodes, customWalls)
-  const all = [...baseWalls, ...customWalls]
-  const z = zones(all, nodes)
-  let room: Room | null = null, bd = Infinity
-  for (const r of rooms) {
-    const poly = insetRoom(r, nodes).map(toM)
-    const dd = inPoly([f.x, f.z], poly) ? 0 : distToPoly([f.x, f.z], poly)
-    if (dd < bd) { bd = dd; room = r }
+export type OverflowZone = {
+  poly: [number, number][]
+  kind: 'wall' | 'custom' | 'door' | 'window' | 'item'
+  label: string
+  y0: number
+  y1: number
+}
+
+function clipHalfPlane(poly: V[], ax: number, az: number, nx: number, nz: number): V[] {
+  if (!poly.length) return []
+  const out: V[] = []
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length]
+    const da = (a[0] - ax) * nx + (a[1] - az) * nz
+    const db = (b[0] - ax) * nx + (b[1] - az) * nz
+    if (da >= 0) out.push(a)
+    if ((da >= 0) !== (db >= 0)) {
+      const t = da / (da - db)
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
+    }
   }
-  if (!room || bd > 3) return null
-  const ctx = makeCtx(room, nodes, all, z)
-  const skip = (g: Furn) => g.id === f.id || (f.type === 'chair' && g.type === 'diningTable') || (f.type === 'diningTable' && g.type === 'chair')
-  for (const g of others) {
-    if (skip(g)) continue
-    const gs = sizeOf(g), o = mk(g.x, g.z, g.rot, gs.w, gs.d)
-    if (g.y && g.y > 0.3) ctx.shelves.push(o); else ctx.placed.push({ o, h: gs.h })
+  return out
+}
+
+function clipOBB(subj: V[], b: OBB): V[] {
+  let poly = subj
+  poly = clipHalfPlane(poly, b.c[0] - b.ax[0] * b.hx, b.c[1] - b.ax[1] * b.hx, b.ax[0], b.ax[1])
+  poly = clipHalfPlane(poly, b.c[0] + b.ax[0] * b.hx, b.c[1] + b.ax[1] * b.hx, -b.ax[0], -b.ax[1])
+  poly = clipHalfPlane(poly, b.c[0] - b.az[0] * b.hz, b.c[1] - b.az[1] * b.hz, b.az[0], b.az[1])
+  poly = clipHalfPlane(poly, b.c[0] + b.az[0] * b.hz, b.c[1] + b.az[1] * b.hz, -b.az[0], -b.az[1])
+  return poly.length >= 3 ? poly : []
+}
+
+function signedAreaV(p: V[]) {
+  let s = 0
+  for (let i = 0; i < p.length; i++) {
+    const [x1, y1] = p[i], [x2, y2] = p[(i + 1) % p.length]
+    s += x1 * y2 - x2 * y1
   }
-  const base = sizeOf(f)
-  const sizes: [number, number][] = [[base.w, base.d]]
-  for (const p of [...(PRESETS[f.type] ?? [])].sort((a, b) => b.w * b.d - a.w * a.d)) if (p.w * p.d < base.w * base.d - 1e-6) sizes.push([p.w, p.d])
-  for (const k of [0.9, 0.8, 0.7]) sizes.push([base.w * k, base.d * k])
-  const h = f.type === 'kitchen' ? 0.9 : CATALOG[f.type].h
-  const free = ['chair', 'diningTable', 'coffeeTable', 'armchair'].includes(f.type)
-  const xs = ctx.poly.map((p) => p[0]), zs = ctx.poly.map((p) => p[1])
-  for (const [w, d] of sizes) {
-    let best: { x: number; z: number; rot: number } | null = null, bestD = Infinity
-    if (free) {
-      for (const rot of [f.rot, f.rot + Math.PI / 2]) for (let x = Math.min(...xs); x <= Math.max(...xs); x += 0.05) for (let zz = Math.min(...zs); zz <= Math.max(...zs); zz += 0.05) {
-        const dd = Math.hypot(x - f.x, zz - f.z)
-        if (dd < bestD && valid(ctx, mk(x, zz, rot, w, d), h)) { bestD = dd; best = { x, z: zz, rot } }
-      }
-    } else {
-      for (const c of wallCands(ctx, w, d)) {
-        const dd = Math.hypot(c.x - f.x, c.z - f.z)
-        if (dd < bestD && valid(ctx, mk(c.x, c.z, c.rot, w, d), h)) { bestD = dd; best = { x: c.x, z: c.z, rot: c.rot } }
+  return s / 2
+}
+
+function distToSeg(p: V, a: V, b: V) {
+  const dx = b[0] - a[0], dz = b[1] - a[1]
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / (dx * dx + dz * dz || 1)))
+  return Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dz * t)
+}
+
+/** Exact XZ polygons where a furniture item overflows a wall, door, window, or another item. */
+export function overflowZones(f: Furn, nodes: Record<string, Pt>, customWalls: Wall[], others: Furn[] = []): OverflowZone[] {
+  const { h } = sizeOf(f)
+  const y0 = f.y ?? 0, y1 = y0 + h
+  const os = obbsOf(f)
+  const out: OverflowZone[] = []
+
+  const roomPolys = rooms.filter((r) => !r.skip).map((r) => insetRoom(r, nodes).map(toM))
+  const allCs = os.flatMap(corners)
+  const fits = roomPolys.some((poly) => allCs.every((c) => inPoly(c, poly)))
+  if (!fits) {
+    let host = roomPolys.find((poly) => inPoly([f.x, f.z], poly))
+    if (!host) {
+      let bd = Infinity
+      for (const poly of roomPolys) {
+        const dd = distToPoly([f.x, f.z], poly)
+        if (dd < bd) { bd = dd; host = poly }
       }
     }
-    if (best) return { ...f, ...best, w, d }
+    let addedWall = false
+    if (host && allCs.some((c) => inPoly(c, host!))) {
+      const sgn = Math.sign(signedAreaV(host)) || 1
+      for (const o of os) {
+        const cs = corners(o)
+        for (let i = 0; i < host.length; i++) {
+          const a = host[i], b = host[(i + 1) % host.length]
+          const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz)
+          if (L < 0.02) continue
+          const outNx = (dz / L) * sgn, outNz = (-dx / L) * sgn
+          const clipped = clipHalfPlane(cs, a[0], a[1], outNx, outNz)
+          if (clipped.length < 3) continue
+          let maxDepth = 0, mx = 0, mz = 0
+          for (const p of clipped) {
+            mx += p[0]; mz += p[1]
+            const dep = (p[0] - a[0]) * outNx + (p[1] - a[1]) * outNz
+            if (dep > maxDepth) maxDepth = dep
+          }
+          mx /= clipped.length; mz /= clipped.length
+          if (maxDepth >= 0.005 && !inPoly([mx, mz], host) && distToSeg([mx, mz], a, b) <= maxDepth + 0.15) {
+            out.push({ poly: clipped, kind: 'wall', label: `wall +${Math.round(maxDepth * 100)} cm`, y0, y1 })
+            addedWall = true
+          }
+        }
+      }
+    }
+    if (!addedWall) for (const o of os) out.push({ poly: corners(o), kind: 'wall', label: 'outside room', y0, y1 })
   }
+
+  const z = zones([...baseWalls, ...customWalls], nodes)
+  for (const o of os) {
+    const cs = corners(o)
+    for (const q of z.custom) {
+      if (!overlaps(o, q)) continue
+      const poly = clipOBB(cs, q)
+      if (poly.length >= 3) out.push({ poly, kind: 'custom', label: 'added wall', y0, y1 })
+    }
+    if (y0 < 2.0 && f.type !== 'rug') {
+      for (const q of z.doors) {
+        if (!overlaps(o, q)) continue
+        const poly = clipOBB(cs, q)
+        if (poly.length >= 3) out.push({ poly, kind: 'door', label: 'blocks door', y0, y1: Math.min(y1, 2.05) })
+      }
+    }
+    if (y1 > 1.2 && f.type !== 'shower' && f.type !== 'rug' && !(f.type === 'kitchen' && f.low)) {
+      for (const q of z.windows) {
+        if (!overlaps(o, q)) continue
+        const poly = clipOBB(cs, q)
+        if (poly.length >= 3) out.push({ poly, kind: 'window', label: 'window', y0: Math.max(y0, 0.9), y1 })
+      }
+    }
+    for (const g of others) {
+      if (g.id === f.id) continue
+      if (f.type === 'rug' || g.type === 'rug') continue
+      if ((f.type === 'chair' && g.type === 'diningTable') || (g.type === 'chair' && f.type === 'diningTable')) continue
+      const gs = sizeOf(g), gy = g.y ?? 0
+      if (y0 >= gy + gs.h - 0.02 || gy >= y1 - 0.02) continue
+      for (const go of obbsOf(g)) {
+        if (!overlaps(o, go, -0.01)) continue
+        const poly = clipOBB(cs, go)
+        if (poly.length >= 3) {
+          const oy0 = Math.max(y0, gy), oy1 = Math.max(Math.min(y1, gy + gs.h), oy0 + 0.08)
+          out.push({ poly, kind: 'item', label: 'overlaps ' + CATALOG[g.type].label.toLowerCase(), y0: oy0, y1: oy1 })
+        }
+      }
+    }
+  }
+  return out
+}
+
+/** Nudge a piece of furniture by the smallest translation along its overflowing axis so it fits, without rotating or resizing it. */
+export function fitFurn(f: Furn, others: Furn[], nodes: Record<string, Pt>, customWalls: Wall[]): Furn | null {
+  const test = (x: number, z: number): boolean => {
+    const dx = x - f.x, dz = z - f.z
+    const cand: Furn = { ...f, x, z }
+    const shifted = others.map((g) => (g.id === f.id ? cand : g.group === f.id ? { ...g, x: g.x + dx, z: g.z + dz } : g))
+    return misplacedReason(cand, nodes, customWalls, shifted) === null
+  }
+  if (test(f.x, f.z)) return f
+
+  // Build candidate axes: item's local axes + world X/Z (deduplicated), prioritizing axes pointing away from overflows
+  const ux = Math.cos(f.rot), uz = -Math.sin(f.rot)
+  const vx = Math.sin(f.rot), vz = Math.cos(f.rot)
+  const rawDirs: V[] = [[ux, uz], [-ux, -uz], [vx, vz], [-vx, -vz]]
+  if (Math.abs(ux) > 0.05 && Math.abs(uz) > 0.05) rawDirs.push([1, 0], [-1, 0], [0, 1], [0, -1])
+
+  const ovs = overflowZones(f, nodes, customWalls, others)
+  // Average push direction: from overflow centroids back toward the item centre
+  let px = 0, pz = 0
+  for (const ov of ovs) {
+    const cx = ov.poly.reduce((s, p) => s + p[0], 0) / ov.poly.length
+    const cz = ov.poly.reduce((s, p) => s + p[1], 0) / ov.poly.length
+    const dx = f.x - cx, dz = f.z - cz, L = Math.hypot(dx, dz)
+    if (L > 1e-4) { px += dx / L; pz += dz / L }
+  }
+  const dirs = [...rawDirs].sort((a, b) => (b[0] * px + b[1] * pz) - (a[0] * px + a[1] * pz))
+
+  // Pass 1: minimal single-axis nudge (1 cm steps up to 1.5 m)
+  for (let d = 0.01; d <= 1.501; d += 0.01) {
+    for (const [dx, dz] of dirs) {
+      const x = Math.round((f.x + dx * d) * 1000) / 1000
+      const z = Math.round((f.z + dz * d) * 1000) / 1000
+      if (test(x, z)) return { ...f, x, z }
+    }
+  }
+
+  // Pass 2: minimal 2-axis nudge (for corner overflows on both axes at once)
+  let bestX = f.x, bestZ = f.z, bestD = Infinity
+  for (const step of [0.02, 0.05]) {
+    const lim = step === 0.02 ? 0.5 : 1.5
+    for (let a = -lim; a <= lim + 1e-6; a += step) {
+      for (let b = -lim; b <= lim + 1e-6; b += step) {
+        if (Math.abs(a) < 1e-4 || Math.abs(b) < 1e-4) continue
+        const distSq = a * a + b * b
+        if (distSq >= bestD * bestD) continue
+        const x = Math.round((f.x + ux * a + vx * b) * 1000) / 1000
+        const z = Math.round((f.z + uz * a + vz * b) * 1000) / 1000
+        if (test(x, z)) { bestX = x; bestZ = z; bestD = Math.sqrt(distSq) }
+      }
+    }
+    if (Number.isFinite(bestD)) return { ...f, x: bestX, z: bestZ }
+  }
+
   return null
 }
 

@@ -120,6 +120,7 @@ label.check { display: flex; align-items: center; gap: 6px; }
 .lbl { background: #000a; color: #fff; font: 600 11px system-ui; padding: 1px 6px; border-radius: 5px; white-space: nowrap; user-select: none; }
 .lbl.dim { background: #1e6fffd0; } .lbl.room { background: #222d; font-weight: 700; text-align: center; } .lbl.wall { background: #777c; font-size: 10px; } .lbl.door { background: #b5651dd0; } .lbl.window { background: #0f8a8ad0; }
 .lbl.item { background: #fffe; color: #222; border: 1px solid #888; } .lbl.pin { background: #e5222bd0; } .lbl.selroom { outline: 2px solid #fff; } .lbl.pinwarn { background: #b36b00e0; max-width: 260px; white-space: normal; text-align: center; }
+.lbl.gap { background: #ea580ce6; color: #fff; font-size: 10.5px; } .lbl.hover { background: #2563ebe6; color: #fff; font-size: 10.5px; } .lbl.overflow { background: #dc2626ee; color: #fff; font-size: 10.5px; }
 
 /* ───────── plan tracer ───────── */
 .tr { position: fixed; inset: 0; z-index: 50; background: var(--bg); display: flex; flex-direction: column; }

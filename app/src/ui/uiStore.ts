@@ -6,7 +6,7 @@ export type Theme = 'light' | 'dark'
 export const isTouch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches
 
 const KEY = 'planner-ui-v1'
-type Saved = { rulesOnCriteria?: boolean; theme?: Theme; quality?: Quality; res?: number; fps?: number; mcp?: boolean; showFps?: boolean; cards?: Record<string, boolean>; helpSeen?: boolean; env?: EnvId; menuOpen?: boolean }
+type Saved = { rulesOnCriteria?: boolean; theme?: Theme; quality?: Quality; res?: number; fps?: number; mcp?: boolean; showFps?: boolean; cards?: Record<string, boolean>; helpSeen?: boolean; env?: EnvId; menuOpen?: boolean; floor?: number; totalFloors?: number; parking?: boolean }
 function load(): Saved { try { return JSON.parse(localStorage.getItem(KEY) ?? '{}') } catch { return {} } }
 const saved = load()
 // handy for links and testing: ?theme=light|dark  ?quality=low|med|high  ?menu=0|1  ?help=0
@@ -30,6 +30,12 @@ type UI = {
   showFps: boolean
   res: number // render resolution as a share of the screen's pixels: 0 = automatic (from the graphics mode)
   env: EnvId
+  floor: number                   // which floor this flat is on (1..25)
+  totalFloors: number             // total floors of the building / neighbourhood scale (1..25)
+  parking: boolean                // parking lot with cars around the building
+  setFloor: (n: number) => void
+  setTotalFloors: (n: number) => void
+  setParking: (b: boolean) => void
   on2d: boolean
   overlay: boolean
   ceiling2d: boolean
@@ -85,6 +91,12 @@ export const useUI = create<UI>((set, get) => ({
   res: Number(qs.get('res')) || saved.res || 0,
   quality: (qs.get('quality') as Quality) || saved.quality || (isTouch ? 'low' : 'high'),
   env: saved.env ?? 'day',
+  floor: saved.floor ?? 5,
+  totalFloors: saved.totalFloors ?? 9,
+  parking: saved.parking ?? true,
+  setFloor: (n) => set((s) => { const floor = Math.max(1, Math.min(25, Math.round(n))); return { floor, totalFloors: Math.max(s.totalFloors, floor) } }),
+  setTotalFloors: (n) => set((s) => { const totalFloors = Math.max(1, Math.min(25, Math.round(n))); return { totalFloors, floor: Math.min(s.floor, totalFloors) } }),
+  setParking: (parking) => set({ parking }),
   on2d: false,
   overlay: false,
   ceiling2d: false,
@@ -124,5 +136,5 @@ export const useUI = create<UI>((set, get) => ({
 }))
 
 useUI.subscribe((s) => {
-  try { localStorage.setItem(KEY, JSON.stringify({ rulesOnCriteria: s.rulesOnCriteria, theme: s.theme, quality: s.quality, res: s.res, mcp: s.mcp, fps: s.fps, showFps: s.showFps, cards: s.cards, helpSeen: s.helpSeen, env: s.env, menuOpen: s.menuOpen } satisfies Saved)) } catch { /* ignore */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ rulesOnCriteria: s.rulesOnCriteria, theme: s.theme, quality: s.quality, res: s.res, mcp: s.mcp, fps: s.fps, showFps: s.showFps, cards: s.cards, helpSeen: s.helpSeen, env: s.env, menuOpen: s.menuOpen, floor: s.floor, totalFloors: s.totalFloors, parking: s.parking } satisfies Saved)) } catch { /* ignore */ }
 })

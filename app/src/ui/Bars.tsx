@@ -21,37 +21,43 @@ export function takeScreenshot() {
 type Item = { id: string; label: string; icon: string; active: boolean; go: () => void }
 
 export function ModeBar() {
-  const s = useStore()
-  const u = useUI()
+  const mode = useStore((s) => s.mode)
+  const stage = useStore((s) => s.stage)
+  const setMode = useStore((s) => s.setMode)
+  const on2d = useUI((s) => s.on2d)
+  const setOn2d = useUI((s) => s.setOn2d)
+  const menuOpen = useUI((s) => s.menuOpen)
+  const toolsOpen = useUI((s) => s.toolsOpen)
+  const setMenuOpen = useUI((s) => s.setMenuOpen)
   const exitLock = () => document.exitPointerLock?.()
-  const view2d = u.on2d && s.mode !== 'walk' && s.mode !== 'fly'
+  const view2d = on2d && mode !== 'walk' && mode !== 'fly'
   const set = (m: Mode, two = false) => () => {
-    exitLock(); resetTouchInput(); u.setOn2d(two); s.setMode(m)
-    if ((m === 'walk' || m === 'fly') && window.innerWidth < 760) u.setMenuOpen(false) // phones: give the whole screen to the view
+    exitLock(); resetTouchInput(); setOn2d(two); setMode(m)
+    if ((m === 'walk' || m === 'fly') && window.innerWidth < 760) setMenuOpen(false) // phones: give the whole screen to the view
   }
   const groups: { name: string; items: Item[] }[] = [
     { name: 'View', items: [
-      { id: 'orbit', label: 'Orbit', icon: 'orbit', active: s.mode === 'view' && !view2d, go: set('view') },
-      { id: '2d', label: '2D', icon: 'plan', active: view2d && s.mode === 'view', go: () => { exitLock(); u.setOn2d(true); if (s.mode === 'walk' || s.mode === 'fly') s.setMode('view') } },
-      { id: 'walk', label: 'Walk', icon: 'walk', active: s.mode === 'walk', go: set('walk') },
-      { id: 'fly', label: 'Fly', icon: 'fly', active: s.mode === 'fly', go: set('fly') },
+      { id: 'orbit', label: 'Orbit', icon: 'orbit', active: mode === 'view' && !view2d, go: set('view') },
+      { id: '2d', label: '2D', icon: 'plan', active: view2d && mode === 'view', go: () => { exitLock(); setOn2d(true); if (mode === 'walk' || mode === 'fly') setMode('view') } },
+      { id: 'walk', label: 'Walk', icon: 'walk', active: mode === 'walk', go: set('walk') },
+      { id: 'fly', label: 'Fly', icon: 'fly', active: mode === 'fly', go: set('fly') },
     ] },
     { name: 'Edit', items: [
-      { id: 'walls', label: 'Walls', icon: 'walls', active: s.mode === 'walls', go: () => { exitLock(); s.setMode('walls') } },
-      { id: 'furniture', label: 'Furniture', icon: 'box', active: s.mode === 'furniture', go: () => { exitLock(); s.setMode('furniture') } },
-      { id: 'move', label: 'Move', icon: 'move', active: s.mode === 'move', go: () => { exitLock(); s.setMode('move') } },
-      { id: 'rooms', label: 'Rooms', icon: 'rooms', active: s.mode === 'rooms', go: () => { exitLock(); s.setMode('rooms') } },
-      { id: 'style', label: 'Style', icon: 'palette', active: s.mode === 'style', go: () => { exitLock(); s.setMode('style') } },
-      { id: 'openings', label: 'Doors', icon: 'door', active: s.mode === 'openings', go: () => { exitLock(); s.setMode('openings') } },
-      { id: 'dims', label: 'Sizes', icon: 'ruler', active: s.mode === 'dims', go: () => { exitLock(); s.setMode('dims') } },
+      { id: 'walls', label: 'Walls', icon: 'walls', active: mode === 'walls', go: () => { exitLock(); setMode('walls') } },
+      { id: 'furniture', label: 'Furniture', icon: 'box', active: mode === 'furniture', go: () => { exitLock(); setMode('furniture') } },
+      { id: 'move', label: 'Move', icon: 'move', active: mode === 'move', go: () => { exitLock(); setMode('move') } },
+      { id: 'rooms', label: 'Rooms', icon: 'rooms', active: mode === 'rooms', go: () => { exitLock(); setMode('rooms') } },
+      { id: 'style', label: 'Style', icon: 'palette', active: mode === 'style', go: () => { exitLock(); setMode('style') } },
+      { id: 'openings', label: 'Doors', icon: 'door', active: mode === 'openings', go: () => { exitLock(); setMode('openings') } },
+      { id: 'dims', label: 'Sizes', icon: 'ruler', active: mode === 'dims', go: () => { exitLock(); setMode('dims') } },
     ] },
   ]
   return (
-    <nav className={'modebar' + (u.menuOpen ? ' shiftL' : '') + (u.toolsOpen && ['walls', 'furniture', 'move', 'rooms', 'style', 'openings', 'dims'].includes(s.mode) ? ' shiftR' : '')} aria-label="Modes">
+    <nav className={'modebar' + (menuOpen ? ' shiftL' : '') + (toolsOpen && ['walls', 'furniture', 'move', 'rooms', 'style', 'openings', 'dims'].includes(mode) ? ' shiftR' : '')} aria-label="Modes">
       {groups.map((g) => (
         <div key={g.name} className="mgroup">
           {g.items.map((i) => (
-            <button key={i.id} className={'mbtn' + (i.active ? ' on' : '')} onClick={i.go} disabled={s.stage === 'setup' && ['furniture', 'move'].includes(i.id)} title={s.stage === 'setup' && ['furniture', 'move'].includes(i.id) ? 'Finish the flat setup first' : i.label} aria-pressed={i.active}>
+            <button key={i.id} className={'mbtn' + (i.active ? ' on' : '')} onClick={i.go} disabled={stage === 'setup' && ['furniture', 'move'].includes(i.id)} title={stage === 'setup' && ['furniture', 'move'].includes(i.id) ? 'Finish the flat setup first' : i.label} aria-pressed={i.active}>
               <Icon n={i.icon} size={19} /><span>{i.label}</span>
             </button>
           ))}
@@ -62,10 +68,18 @@ export function ModeBar() {
 }
 
 export function TopBar() {
-  const s = useStore()
-  const u = useUI()
+  const flatId = useStore((s) => s.flatId)
+  const canUndo = useStore((s) => s.past.length > 0)
+  const canRedo = useStore((s) => s.future.length > 0)
+  const undo = useStore((s) => s.undo)
+  const redo = useStore((s) => s.redo)
+  const menuOpen = useUI((s) => s.menuOpen)
+  const setMenuOpen = useUI((s) => s.setMenuOpen)
+  const theme = useUI((s) => s.theme)
+  const setTheme = useUI((s) => s.setTheme)
+  const setHelp = useUI((s) => s.setHelp)
   useUI((x) => x.flatsVersion)
-  const name = FLATS.find((f) => f.id === s.flatId)?.name.replace(/ · .*$/, '') ?? ''
+  const name = FLATS.find((f) => f.id === flatId)?.name.replace(/ · .*$/, '') ?? ''
   const fs = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.() }
   useEffect(() => {
     const shot = () => takeScreenshot()
@@ -74,27 +88,27 @@ export function TopBar() {
       const t = e.target as HTMLElement | null
       if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement) return
       if (useUI.getState().tracer) return
-      if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey) u.setMenuOpen(!useUI.getState().menuOpen)
-      if (e.key === '?') u.setHelp(true)
+      if (e.code === 'KeyH' && !e.ctrlKey && !e.metaKey) setMenuOpen(!useUI.getState().menuOpen)
+      if (e.key === '?') setHelp(true)
     }
     addEventListener('keydown', key)
     return () => { document.removeEventListener('planner-screenshot', shot); removeEventListener('keydown', key) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
-      {!u.menuOpen && (
-        <button className="fab-menu" onClick={() => u.setMenuOpen(true)} aria-label="Show menu" title="Show menu (H)">
+      {!menuOpen && (
+        <button className="fab-menu" onClick={() => setMenuOpen(true)} aria-label="Show menu" title="Show menu (H)">
           <Icon n="menu" size={20} /><span>{name}</span>
         </button>
       )}
       <div className="topbar">
-        <button className="ibtn glass" disabled={!s.past.length} onClick={s.undo} title="Undo (Ctrl+Z)"><Icon n="undo" /></button>
-        <button className="ibtn glass" disabled={!s.future.length} onClick={s.redo} title="Redo (Ctrl+Y)"><Icon n="redo" /></button>
+        <button className="ibtn glass" disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)"><Icon n="undo" /></button>
+        <button className="ibtn glass" disabled={!canRedo} onClick={redo} title="Redo (Ctrl+Y)"><Icon n="redo" /></button>
         <span className="sep" />
         <button className="ibtn glass" onClick={takeScreenshot} title="Save a picture"><Icon n="camera" /></button>
         {!isTouch && <button className="ibtn glass" onClick={fs} title="Full screen"><Icon n="full" /></button>}
-        <button className="ibtn glass" onClick={() => u.setTheme(u.theme === 'dark' ? 'light' : 'dark')} title="Light / dark"><Icon n={u.theme === 'dark' ? 'sun' : 'moon'} /></button>
-        <button className="ibtn glass" onClick={() => u.setHelp(true)} title="Help (?)"><Icon n="help" /></button>
+        <button className="ibtn glass" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Light / dark"><Icon n={theme === 'dark' ? 'sun' : 'moon'} /></button>
+        <button className="ibtn glass" onClick={() => setHelp(true)} title="Help (?)"><Icon n="help" /></button>
       </div>
     </>
   )

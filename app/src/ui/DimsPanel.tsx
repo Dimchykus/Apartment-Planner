@@ -20,7 +20,7 @@ export function DimsPanel() {
   const row = (k: string, v: string) => <tr key={k}><td>{k}</td><td>{v}</td></tr>
   return (
     <div className="dims-panel">
-      <p className="hint">Lengths in cm. Blue = clear wall length, grey = thickness, brown / teal = doors / windows.</p>
+      <p className="hint">Lengths in cm. Blue = clear wall length, grey = thickness, brown / teal = doors / windows, orange = selected item to walls. Click any item to measure its distance to the walls.</p>
 
       <b>Rooms</b>
       <table className="tr-table">

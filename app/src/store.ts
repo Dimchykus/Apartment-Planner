@@ -1,9 +1,10 @@
+import { useMemo } from 'react'
 import { create } from 'zustand'
-import { rooms, walls as baseWalls, constrainNode, snapPoint, PX_PER_M, activateFlat, m, initialNodes, openingsOf, setOpeningOv, type Pt, type Wall, type Opening } from './plan'
+import { rooms, walls as baseWalls, constrainNode, snapPoint, PX_PER_M, activateFlat, m, initialNodes, openingsOf, setOpeningOv, setDoorStateOv, type Pt, type Wall, type Opening } from './plan'
 import { FLATS, BUILTIN_IDS } from './flats'
 import { autoFurnish, inRoom, fitFurn, misplaced, misplacedReason, allowedKinds, type RoomKind } from './autofurnish'
 import { DEFAULT_CRITERIA, type Criteria } from './criteria'
-import { CATALOG, type FType, type Furn } from './catalog'
+import { CATALOG, isWallMounted, type FType, type Furn } from './catalog'
 import type { FloorId } from './materials'
 import { autoElectrics, lightKey, type Light, type Switch, type LightGroup } from './wiring'
 import { OPENING_PRESETS, fitOpening, type PresetId } from './openingTools'
@@ -49,7 +50,7 @@ type State = {
   setOpeningTool: (t: 'select' | 'add') => void
   setOpeningPreset: (p: PresetId) => void
   addOpening: (wall: string, atPx: number, preset?: PresetId) => boolean
-  editOpening: (wall: string, i: number, p: { width?: number; sill?: number; top?: number; centre?: number; kind?: 'window' | 'door'; glass?: boolean }) => void
+  editOpening: (wall: string, i: number, p: { width?: number | 'wall'; sill?: number; top?: number; centre?: number; kind?: 'window' | 'door'; glass?: boolean }) => void
   removeOpening: (wall: string, i: number) => void
   toggleLight: (room: string, group: LightGroup) => void
   setLightsAll: (on: boolean | undefined) => void
@@ -84,7 +85,7 @@ type State = {
   cursor: Pt | null
   newThick: number // cm
   newDoor: boolean
-  drag: { kind: 'node' | 'furn' | 'wall'; id: string; dx: number; dz: number; carry?: boolean; sx?: number; sz?: number; sy?: number; cy?: number } | null
+  drag: { kind: 'node' | 'furn' | 'wall'; id: string; dx: number; dz: number; carry?: boolean; isNew?: boolean; sx?: number; sz?: number; sy?: number; cy?: number } | null
   axis: 'free' | 'x' | 'y' | 'z'        // move lock: x = left-right, y = forward-back (plan), z = height
   setAxis: (a: 'free' | 'x' | 'y' | 'z') => void
   guide: { x?: number; z?: number } | null
@@ -144,6 +145,7 @@ function flatState(id: string) {
   const roomKinds = sv.roomKinds ?? {}, hintOv = sv.hintOv ?? {}, criteria = { ...DEFAULT_CRITERIA, ...(sv.criteria ?? {}) }
   const openings = sv.openings ?? {}, doorState = sv.doorState ?? {}, roomStyle = sv.roomStyle ?? {}, lightOv = sv.lightOv ?? {}
   setOpeningOv(openings) // before furnishing: furniture keeps clear of the (edited) windows and doors
+  setDoorStateOv(doorState)
   const furniture = sv.furniture ?? autoFurnish(nodes, customWalls, { kinds: roomKinds, hints: hintOv, criteria })
   const el = autoElectrics(nodes, customWalls, furniture, roomKinds, (k) => doorState[k] ?? {})
   const versions: Ver[] = sv.versions?.length ? sv.versions : [{ id: 'v1', name: 'Layout 1', furniture, created: Date.now() }]
@@ -184,7 +186,9 @@ export const useStore = create<State>((set) => ({
     const fit = fitOpening(L, PX_PER_M, cur, { from: atPx - width / 2, to: atPx + width / 2 }, null)
     if (!fit) { useUI.getState().showToast('There is no room for that on this wall piece.'); return false }
     const o: Opening = { from: fit.from, to: fit.to, sill: pr.sill, top: pr.top, kind: pr.kind, ...(pr.glass ? { glass: true } : {}) }
-    set({ openings: { ...s.openings, [wall]: [...cur, o] }, selOpening: { wall, i: cur.length } })
+    const nextOpenings = { ...s.openings, [wall]: [...cur, o] }
+    setOpeningOv(nextOpenings)
+    set({ openings: nextOpenings, selOpening: { wall, i: cur.length } })
     useStore.getState().regenElectrics()
     return true
   },
@@ -195,14 +199,20 @@ export const useStore = create<State>((set) => ({
     const cur = openingsOf(w, s.nodes).map((o) => { const c = { ...o }; delete c.i; return c as Opening })
     const o = cur[i]
     if (!o) return
-    const width = p.width !== undefined ? p.width * PX_PER_M : o.to - o.from
+    const wantW = p.width === 'wall' ? Math.max(o.to - o.from, L - 0.3 * PX_PER_M) : p.width !== undefined ? p.width * PX_PER_M : o.to - o.from
     const centre = p.centre !== undefined ? p.centre * PX_PER_M : (o.from + o.to) / 2
-    const fit = fitOpening(L, PX_PER_M, cur, { from: centre - width / 2, to: centre + width / 2 }, i)
+    let fit = fitOpening(L, PX_PER_M, cur, { from: centre - wantW / 2, to: centre + wantW / 2 }, i)
+    // If widening doesn't fit next to another opening, still apply sill/top/kind changes at the current span
+    if (!fit && (p.sill !== undefined || p.top !== undefined || p.kind !== undefined || p.glass !== undefined)) {
+      fit = { from: o.from, to: o.to }
+    }
     if (!fit) return
     let sill = p.sill ?? o.sill, top = p.top ?? o.top
     top = Math.min(2.65, Math.max(top, sill + 0.3)); sill = Math.max(0, Math.min(sill, top - 0.3))
     const next = [...cur]; next[i] = { ...o, ...fit, sill, top, ...(p.kind ? { kind: p.kind } : {}), ...(p.glass !== undefined ? { glass: p.glass } : {}) }
-    set({ openings: { ...s.openings, [wall]: next } })
+    const nextOpenings = { ...s.openings, [wall]: next }
+    setOpeningOv(nextOpenings)
+    set({ openings: nextOpenings })
     useStore.getState().regenElectrics()
   },
   removeOpening: (wall, i) => {
@@ -210,7 +220,9 @@ export const useStore = create<State>((set) => ({
     if (!w) return
     const cur = openingsOf(w, s.nodes).map((o) => { const c = { ...o }; delete c.i; return c as Opening })
     cur.splice(i, 1)
-    set({ openings: { ...s.openings, [wall]: cur }, selOpening: null })
+    const nextOpenings = { ...s.openings, [wall]: cur }
+    setOpeningOv(nextOpenings)
+    set({ openings: nextOpenings, selOpening: null })
     useStore.getState().regenElectrics()
   },
   toggleLight: (room, group) => set((s) => {
@@ -226,22 +238,26 @@ export const useStore = create<State>((set) => ({
     const st = useStore.getState(), p = st.past[st.past.length - 1]
     if (!p) return
     applying = true
-    set({ ...p, past: st.past.slice(0, -1), future: [...st.future, snapOf(st)], selected: null, drag: null, selOpening: null })
-    setOpeningOv(p.openings); useStore.getState().regenElectrics()
-    applying = false; lastPush = 0
+    setOpeningOv(p.openings); setDoorStateOv(p.doorState)
+    set({ ...p, past: st.past.slice(0, -1), future: [...st.future, snapOf(st)], selected: null, drag: null, guide: null, selOpening: null })
+    useStore.getState().regenElectrics()
+    applying = false; lastPush = 0; lastPushKey = ''
   },
   redo: () => {
     const st = useStore.getState(), n = st.future[st.future.length - 1]
     if (!n) return
     applying = true
-    set({ ...n, future: st.future.slice(0, -1), past: [...st.past, snapOf(st)], selected: null, drag: null, selOpening: null })
-    setOpeningOv(n.openings); useStore.getState().regenElectrics()
-    applying = false; lastPush = 0
+    setOpeningOv(n.openings); setDoorStateOv(n.doorState)
+    set({ ...n, future: st.future.slice(0, -1), past: [...st.past, snapOf(st)], selected: null, drag: null, guide: null, selOpening: null })
+    useStore.getState().regenElectrics()
+    applying = false; lastPush = 0; lastPushKey = ''
   },
   switchFlat: (id) => {
     const s0 = useStore.getState()
     if (s0.flatId !== id) save.flats![s0.flatId] = { nodes: s0.nodes, furniture: s0.furniture, customWalls: s0.customWalls, roomKinds: s0.roomKinds, hintOv: s0.hintOv, criteria: s0.criteria, openings: s0.openings, doorState: s0.doorState, roomStyle: s0.roomStyle, lightOv: s0.lightOv, versions: s0.versions.map((v) => (v.id === s0.activeVer ? { ...v, furniture: s0.furniture } : v)), activeVer: s0.activeVer, stage: s0.stage }
-    set({ ...flatState(id), past: [], future: [], mode: 'view', selected: null, selRoom: null, placing: null, tool: 'move', drawStart: null, drag: null })
+    applying = true
+    set({ ...flatState(id), past: [], future: [], mode: 'view', selected: null, selOpening: null, selRoom: null, placing: null, tool: 'move', drawStart: null, drag: null, guide: null })
+    applying = false; lastPush = 0; lastPushKey = ''; dragPending = false
   },
   selRoom: null,
   notice: null,
@@ -295,8 +311,8 @@ export const useStore = create<State>((set) => ({
   mode: 'view',
   selected: null,
   drag: null,
-  setMode: (mode) => set({ mode, selected: null, selRoom: null, placing: null, tool: 'move', drawStart: null }),
-  setTool: (tool) => set({ tool, drawStart: null, cursor: null, selected: null }),
+  setMode: (mode) => set({ mode, selected: null, selOpening: null, selRoom: null, placing: null, tool: 'move', drawStart: null }),
+  setTool: (tool) => set({ tool, drawStart: null, cursor: null, selected: null, selOpening: null }),
   setDrawStart: (drawStart) => set({ drawStart }),
   setCursor: (cursor) => set({ cursor }),
   setNew: (p) => set(p),
@@ -321,38 +337,49 @@ export const useStore = create<State>((set) => ({
     if (!w) return {}
     const [ax, ay] = s.nodes[w.a], [bx, by] = s.nodes[w.b]
     const dx = mx * PX_PER_M - (ax + bx) / 2, dy = mz * PX_PER_M - (ay + by) / 2
+    if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return {}
     return { nodes: { ...s.nodes, [w.a]: [ax + dx, ay + dy], [w.b]: [bx + dx, by + dy] } }
   }),
-  select: (selected) => set({ selected }),
+  select: (selected) => set((s) => {
+    if (s.selected === selected) return {}
+    const f = selected ? s.furniture.find((q) => q.id === selected) : undefined
+    const resetZ = s.axis === 'z' && f && !isWallMounted(f.type)
+    return resetZ ? { selected, axis: 'free' as const } : { selected }
+  }),
   axis: 'free',
-  setAxis: (axis) => set({ axis }),
+  setAxis: (axis) => set((s) => (s.axis === axis ? {} : { axis })),
   guide: null,
-  setGuide: (guide) => set({ guide }),
+  setGuide: (guide) => set((s) => (s.guide?.x === guide?.x && s.guide?.z === guide?.z ? {} : { guide })),
   duplicateFurn: (id) => set((s) => { const f = s.furniture.find((q) => q.id === id); if (!f) return {}; const c = { ...f, id: 'f' + Math.random().toString(36).slice(2, 7), x: f.x + 0.35, z: f.z + 0.35, group: undefined }; return { furniture: [...s.furniture, c], selected: c.id } }),
   setDrag: (drag) => set({ drag }),
   moveNode: (id, x, z) => set((s) => {
+    const old = s.nodes[id]
     if (id[0] === 'c') {
       const all = [...baseWalls, ...s.customWalls]
       const p = snapPoint(x * PX_PER_M, z * PX_PER_M, s.nodes, all, [id, id.slice(0, -1)])
+      if (old && Math.abs(p[0] - old[0]) < 1e-4 && Math.abs(p[1] - old[1]) < 1e-4) return {}
       return { nodes: { ...s.nodes, [id]: p } }
     }
     const p = constrainNode(id, x * PX_PER_M, z * PX_PER_M, s.nodes)
-    return p ? { nodes: { ...s.nodes, [id]: p } } : {}
+    if (!p || (old && Math.abs(p[0] - old[0]) < 1e-4 && Math.abs(p[1] - old[1]) < 1e-4)) return {}
+    return { nodes: { ...s.nodes, [id]: p } }
   }),
   // items that belong to a leader (chairs -> table, nightstand -> bed ...) travel with it
   moveFurn: (id, x, z) => set((s) => {
     const f = s.furniture.find((q) => q.id === id)
-    if (!f) return {}
+    if (!f || (Math.abs(x - f.x) < 1e-5 && Math.abs(z - f.z) < 1e-5)) return {}
     const dx = x - f.x, dz = z - f.z
     return { furniture: s.furniture.map((q) => (q.id === id ? { ...q, x, z } : q.group === id ? { ...q, x: q.x + dx, z: q.z + dz } : q)) }
   }),
   patchFurn: (id, p) => set((s) => {
     const f = s.furniture.find((q) => q.id === id)
     if (!f) return {}
-    const dr = p.rot !== undefined ? p.rot - f.rot : 0
+    // Floor-standing furniture is locked on the ground (Z/height = 0)
+    const patch = isWallMounted(f.type) ? p : { ...p, y: undefined }
+    const dr = patch.rot !== undefined ? patch.rot - f.rot : 0
     return {
       furniture: s.furniture.map((q) => {
-        if (q.id === id) return { ...q, ...p }
+        if (q.id === id) return { ...q, ...patch }
         if (q.group !== id || !dr) return q
         const ox = q.x - f.x, oz = q.z - f.z // followers turn around the leader
         return { ...q, x: f.x + ox * Math.cos(dr) + oz * Math.sin(dr), z: f.z - ox * Math.sin(dr) + oz * Math.cos(dr), rot: q.rot + dr }
@@ -366,13 +393,15 @@ export const useStore = create<State>((set) => ({
       const cx = ps.reduce((a, p) => a + p[0], 0) / ps.length, cy = ps.reduce((a, p) => a + p[1], 0) / ps.length
       const item = f(id, type, m(cx), m(cy))
       if (type === 'shelf') item.y = 1.5
-      if (type === 'tv') item.y = 0.9
+      if (type === 'tv' || type === 'mirror') item.y = 0.9
       if (type === 'painting') item.y = 1.3
+      if (type === 'ac') item.y = 2.25
+      const carryDrag = { kind: 'furn' as const, id, dx: 0, dz: 0, carry: true, isNew: true, sx: item.x, sz: item.z, sy: item.y ?? 0, cy: 0 }
       if (type === 'gamingDesk') { // the player's chair comes with the setup, in front of the desk, and moves with it
         const chair: Furn = { ...f(id + 'c', 'gamingChair', item.x, item.z + CATALOG.gamingDesk.d / 2 + 0.38, Math.PI), group: id }
-        return { furniture: [...s.furniture, item, chair], selected: id }
+        return { furniture: [...s.furniture, item, chair], selected: id, drag: carryDrag }
       }
-      return { furniture: [...s.furniture, item], selected: id }
+      return { furniture: [...s.furniture, item], selected: id, drag: carryDrag }
     })
   },
   removeFurn: (id) => set((s) => ({ furniture: s.furniture.filter((q) => q.id !== id && q.group !== id), selected: null })),
@@ -411,7 +440,10 @@ export const useStore = create<State>((set) => ({
   },
 }))
 
-useStore.subscribe((s, prev) => { if (s.openings !== prev.openings) setOpeningOv(s.openings) })
+useStore.subscribe((s, prev) => {
+  if (s.openings !== prev.openings) setOpeningOv(s.openings)
+  if (s.doorState !== prev.doorState) setDoorStateOv(s.doorState)
+})
 // lights and switches follow the furniture (kitchen spots, bedside lamps, switches never behind a wardrobe)
 let electricsTimer: ReturnType<typeof setTimeout> | undefined
 useStore.subscribe((s, prev) => {
@@ -423,28 +455,57 @@ useStore.subscribe((s, prev) => {
 })
 
 // Undo history: every change to walls / furniture / rooms / criteria is recorded automatically.
-// A whole drag counts as one step, and a burst of slider changes on one item is merged.
+// A whole drag counts as one step, and a burst of slider changes on one item/opening is merged.
 const SNAP_KEYS = ['nodes', 'customWalls', 'furniture', 'roomKinds', 'hintOv', 'criteria', 'openings', 'doorState', 'roomStyle'] as const
 function snapOf(s: State): Snap { return { nodes: s.nodes, customWalls: s.customWalls, furniture: s.furniture, roomKinds: s.roomKinds, hintOv: s.hintOv, criteria: s.criteria, openings: s.openings, doorState: s.doorState, roomStyle: s.roomStyle } }
-let applying = false, dragPending = false, lastPush = 0
+let applying = false, dragPending = false, lastPush = 0, lastPushKey = ''
 useStore.subscribe((s, prev) => {
   if (applying) return
   if (!prev.drag && s.drag) dragPending = true
+  if (prev.drag && !s.drag) { dragPending = false; lastPush = 0; lastPushKey = '' }
   if (!s.drag) dragPending = false
-  if (!SNAP_KEYS.some((k) => s[k] !== prev[k])) return
-  if (s.drag) { if (!dragPending) return; dragPending = false }
-  else {
-    const onlyFurn = SNAP_KEYS.every((k) => k === 'furniture' || s[k] === prev[k]) && s.furniture.length === prev.furniture.length
-    if (onlyFurn && Date.now() - lastPush < 500) { lastPush = Date.now(); return }
+  const changed = SNAP_KEYS.filter((k) => s[k] !== prev[k])
+  if (!changed.length) return
+  const key = changed.length === 1 ? changed[0] : ''
+  const mergeFurn = key === 'furniture' && s.furniture.length === prev.furniture.length
+  const mergeOpen = key === 'openings' && Object.values(s.openings).reduce((a, b) => a + b.length, 0) === Object.values(prev.openings).reduce((a, b) => a + b.length, 0)
+  if (s.drag) {
+    if (!dragPending) return
+    dragPending = false
+  } else {
+    const now = Date.now()
+    if ((mergeFurn || mergeOpen) && lastPushKey === key && now - lastPush < 400) {
+      lastPush = now
+      return
+    }
   }
   lastPush = Date.now()
+  lastPushKey = !s.drag && (mergeFurn || mergeOpen) ? key : ''
+  applying = true
   useStore.setState((st) => ({ past: [...st.past.slice(-99), snapOf(prev)], future: [] }))
+  applying = false
 })
 
-useStore.subscribe((s) => {
+const SAVE_KEYS = ['flatId', 'nodes', 'furniture', 'customWalls', 'roomKinds', 'hintOv', 'criteria', 'openings', 'doorState', 'roomStyle', 'lightOv', 'versions', 'activeVer', 'stage'] as const
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+function flushSave() {
+  clearTimeout(saveTimer)
+  saveTimer = undefined
+  const s = useStore.getState()
   save.flats![s.flatId] = { nodes: s.nodes, furniture: s.furniture, customWalls: s.customWalls, roomKinds: s.roomKinds, hintOv: s.hintOv, criteria: s.criteria, openings: s.openings, doorState: s.doorState, roomStyle: s.roomStyle, lightOv: s.lightOv, versions: s.versions.map((v) => (v.id === s.activeVer ? { ...v, furniture: s.furniture } : v)), activeVer: s.activeVer, stage: s.stage }
   try { localStorage.setItem(KEY, JSON.stringify({ current: s.flatId, flats: save.flats })) } catch { /* ignore */ }
+}
+useStore.subscribe((s, prev) => {
+  if (!SAVE_KEYS.some((k) => s[k] !== prev[k])) return
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(flushSave, 400)
 })
+if (typeof addEventListener === 'function') addEventListener('pagehide', () => { if (saveTimer) flushSave() })
+// Prevent Vite HMR from creating duplicate Zustand store instances (which breaks Ctrl+Z and splits UI state)
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => { if (saveTimer) flushSave() })
+  import.meta.hot.accept(() => { location.reload() })
+}
 
 export function shareLink() {
   const { flatId, nodes, furniture, customWalls, roomKinds, hintOv, criteria, openings, doorState, roomStyle, lightOv } = get()
@@ -455,7 +516,9 @@ const get = useStore.getState
 export const getAllWalls = (): Wall[] => [...baseWalls, ...useStore.getState().customWalls]
 export const useAllWalls = (): Wall[] => {
   const c = useStore((s) => s.customWalls)
-  return [...baseWalls, ...c]
+  const flatId = useStore((s) => s.flatId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => [...baseWalls, ...c], [c, flatId])
 }
 
 /** The saved state of a flat (furniture, layouts, edits, room kinds ...): a copy, or undefined if nothing is saved. */

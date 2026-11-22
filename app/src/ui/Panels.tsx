@@ -1,11 +1,12 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { ROOM_KINDS, ZONE_ITEMS, kindInfo } from '../roomkinds'
-import { defaultKind, misplacedReason, allowedKinds, analyze, scoreLayout, balanced, conflicts, type RoomKind } from '../autofurnish'
+import { defaultKind, misplacedReason, blockingDoor, allowedKinds, analyze, scoreLayout, balanced, conflicts, type RoomKind } from '../autofurnish'
 import { CRITERIA_KEYS, CRITERIA_PRESETS, presetOf } from '../criteria'
-import { rooms as planRooms } from '../plan'
+import { rooms as planRooms, doorSwing } from '../plan'
 import { useStore, CATALOG, type Furn } from '../store'
 import { useUI } from './uiStore'
-import { PRESETS, STYLES, FINISHES, sizeOf } from '../catalog'
+import { PRESETS, STYLES, FINISHES, sizeOf, isWallMounted } from '../catalog'
+import { itemWallDistances } from '../Dims'
 
 export const SWATCHES = ['#e9e5de', '#8d8f93', '#3a3532', '#b08a5a', '#7a5a3a', '#8aa0b5', '#6f8f72', '#b5584a', '#d8d2c6']
 
@@ -133,14 +134,25 @@ export function Slider({ label, v, min, max, on }: { label: string; v: number; m
 
 /** Variant picker for the selected piece of furniture: size preset, style, finish, exact size, colour. */
 export function FurnPanel({ sel }: { sel: Furn }) {
-  const s = useStore()
+  const nodes = useStore((s) => s.nodes)
+  const customWalls = useStore((s) => s.customWalls)
+  const furniture = useStore((s) => s.furniture)
+  const doorState = useStore((s) => s.doorState)
+  const setDoor = useStore((s) => s.setDoor)
+  const patchFurn = useStore((s) => s.patchFurn)
+  const fitOne = useStore((s) => s.fitOne)
+  const duplicateFurn = useStore((s) => s.duplicateFurn)
+  const removeFurn = useStore((s) => s.removeFurn)
+  const deferredFurn = useDeferredValue(furniture)
+  const deferredSel = useDeferredValue(sel)
   const cat = CATALOG[sel.type]
   const size = sizeOf(sel)
   const presets = PRESETS[sel.type]
   const styles = STYLES[sel.type]
-  const patch = (p: Partial<Furn>) => s.patchFurn(sel.id, p)
+  const patch = (p: Partial<Furn>) => patchFurn(sel.id, p)
   const [fitMsg, setFitMsg] = useState('')
-  const reason = misplacedReason(sel, s.nodes, s.customWalls, s.furniture)
+  const reason = useMemo(() => { void doorState; return misplacedReason(deferredSel, nodes, customWalls, deferredFurn) }, [deferredSel, nodes, customWalls, deferredFurn, doorState])
+  const blockedDoor = useMemo(() => { void doorState; return reason === 'blocks a door' ? blockingDoor(deferredSel, nodes, customWalls) : null }, [reason, deferredSel, nodes, customWalls, doorState])
   const cmv = (v: number) => Math.round(v * 100)
   const wide = sel.type === 'kitchen' || sel.type === 'wardrobe'
   const range = (base: number, lo: number, hi: number): [number, number] => [Math.round(Math.max(0.2, base * lo) * 100), Math.round(base * hi * 100)]
@@ -148,12 +160,21 @@ export function FurnPanel({ sel }: { sel: Furn }) {
   const [dMin, dMax] = range(cat.d, 0.5, 2)
   const [hMin, hMax] = range(cat.h, 0.5, 1.6)
   const presetIdx = presets?.findIndex((p) => Math.abs(p.w - size.w) < 0.005 && Math.abs(p.d - size.d) < 0.005 && (p.h === undefined || Math.abs(p.h - size.h) < 0.005)) ?? -1
+  const wallDists = useMemo(() => itemWallDistances(deferredSel, nodes, customWalls), [deferredSel, nodes, customWalls])
   return (
     <div className="sel">
       <b>{cat.label}</b> <small>{cmv(size.w)}×{cmv(size.d)}×{cmv(size.h)} cm</small>
+      {wallDists.length > 0 && (
+        <small>To walls: {wallDists.map((d) => `${d.side} ${cmv(d.dist)}`).join(' · ')} cm</small>
+      )}
       {reason && (
         <div className="warn">⚠ {reason}
-          <button onClick={() => setFitMsg(s.fitOne(sel.id) ? 'Moved / resized to fit.' : "Couldn't find a spot where it fits. Try a smaller size or another room.")}>Fit to space</button>
+          <div className="row2">
+            <button onClick={() => setFitMsg(fitOne(sel.id) ? 'Moved to fit.' : "Couldn't fit by nudging. Try moving or resizing it.")}>Fit to space</button>
+            {blockedDoor && (
+              <button onClick={() => setDoor(blockedDoor.key, { swing: doorSwing(blockedDoor.wall, blockedDoor.opening, nodes, doorState) === 1 ? -1 : 1 })}>⤾ Flip door side</button>
+            )}
+          </div>
           {fitMsg && <small>{fitMsg}</small>}
         </div>
       )}
@@ -180,8 +201,8 @@ export function FurnPanel({ sel }: { sel: Furn }) {
       </label>
       <Slider label="Width" v={cmv(size.w)} min={wMin} max={wMax} on={(x) => patch({ w: x })} />
       <Slider label="Depth" v={cmv(size.d)} min={dMin} max={dMax} on={(x) => patch({ d: x })} />
-      {sel.type !== 'shelf' && <Slider label="Height" v={cmv(size.h)} min={hMin} max={hMax} on={(x) => patch({ h: x })} />}
-      {sel.type === 'shelf' && <Slider label="Mounted at" v={cmv(sel.y ?? 1.5)} min={30} max={220} on={(x) => patch({ y: x })} />}
+      {!isWallMounted(sel.type) && sel.type !== 'rug' && <Slider label="Height" v={cmv(size.h)} min={hMin} max={hMax} on={(x) => patch({ h: x })} />}
+      {isWallMounted(sel.type) && <Slider label="Mounted at" v={cmv(sel.y ?? (sel.type === 'ac' ? 2.25 : sel.type === 'shelf' ? 1.5 : 0.9))} min={20} max={240} on={(x) => patch({ y: x })} />}
       <div>
         {SWATCHES.map((c) => <span key={c} className="sw" style={{ background: c }} onClick={() => patch({ color: c })} />)}
         <input type="color" value={sel.color ?? cat.color} onChange={(e) => patch({ color: e.target.value })} title="Any colour" />
@@ -189,8 +210,8 @@ export function FurnPanel({ sel }: { sel: Furn }) {
       <div>
         <button onClick={() => patch({ rot: sel.rot + Math.PI / 2 })}>Rotate</button>
         <button onClick={() => patch({ w: undefined, d: undefined, h: undefined, style: undefined, finish: undefined, color: undefined })}>Reset</button>
-        <button onClick={() => s.duplicateFurn(sel.id)} title="Ctrl+D">Duplicate</button>
-        <button onClick={() => s.removeFurn(sel.id)}>Remove</button>
+        <button onClick={() => duplicateFurn(sel.id)} title="Ctrl+D">Duplicate</button>
+        <button onClick={() => removeFurn(sel.id)}>Remove</button>
       </div>
     </div>
   )

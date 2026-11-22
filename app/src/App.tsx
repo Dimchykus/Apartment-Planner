@@ -1,5 +1,5 @@
 import { startMcpBridge } from './lib/mcpBridge'
-import { Suspense, useEffect, useRef } from 'react'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, OrthographicCamera, Environment, Lightformer, SoftShadows } from '@react-three/drei'
 import { EffectComposer, N8AO, Bloom, ToneMapping, SMAA } from '@react-three/postprocessing'
@@ -7,7 +7,7 @@ import * as THREE from 'three'
 import { Flat, PlanOverlay } from './Flat'
 import { Walker, Flyer } from './Walk'
 import { DragPlane, Guides, WallHandles, Furniture, Keys } from './Editor'
-import { Dimensions } from './Dims'
+import { Dimensions, ItemWallDims } from './Dims'
 import { Outside, SunLight, ENV_SETTINGS } from './Outside'
 import { RoomsLayer } from './Rooms'
 import { Electrics } from './Electrics'
@@ -151,28 +151,42 @@ function FreezeShadows() {
 }
 
 export default function App() {
-  const s = useStore()
-  const u = useUI()
-  const tracerOpen = !!u.tracer
-  const fly = s.mode === 'fly'
-  const walk = s.mode === 'walk'
-  const wallView = !walk && !fly ? u.wallView : null
-  const view2d = u.on2d && !walk && !fly && !wallView // flat top-down 2D view
-  const op = u.overlay ? u.flatOpacity : 1
-  const env = u.env
-  const q = u.quality
-  const pts = Object.values(initialNodes)
-  const cx = m((Math.min(...pts.map((p) => p[0])) + Math.max(...pts.map((p) => p[0]))) / 2)
-  const cz = m((Math.min(...pts.map((p) => p[1])) + Math.max(...pts.map((p) => p[1]))) / 2)
-  const fw = m(Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0])))
-  const fh = m(Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1])))
+  const mode = useStore((s) => s.mode)
+  const flatId = useStore((s) => s.flatId)
+  const dragging = useStore((s) => !!s.drag)
+  const tracer = useUI((s) => s.tracer)
+  const wallViewRaw = useUI((s) => s.wallView)
+  const on2d = useUI((s) => s.on2d)
+  const overlay = useUI((s) => s.overlay)
+  const flatOpacity = useUI((s) => s.flatOpacity)
+  const env = useUI((s) => s.env)
+  const q = useUI((s) => s.quality)
+  const theme = useUI((s) => s.theme)
+  const ceiling2d = useUI((s) => s.ceiling2d)
+  const ortho = useUI((s) => s.ortho)
+  const fps = useUI((s) => s.fps)
+  const res = useUI((s) => s.res)
+  const showFps = useUI((s) => s.showFps)
+  const tracerOpen = !!tracer
+  const fly = mode === 'fly'
+  const walk = mode === 'walk'
+  const wallView = !walk && !fly ? wallViewRaw : null
+  const view2d = on2d && !walk && !fly && !wallView // flat top-down 2D view
+  const op = overlay ? flatOpacity : 1
+  const { cx, cz, fw, fh } = useMemo(() => {
+    const pts = Object.values(initialNodes)
+    const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1])
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys)
+    return { cx: m((minX + maxX) / 2), cz: m((minY + maxY) / 2), fw: m(maxX - minX), fh: m(maxY - minY) }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flatId])
 
-  useEffect(() => { document.documentElement.dataset.theme = u.theme }, [u.theme])
+  useEffect(() => { document.documentElement.dataset.theme = theme }, [theme])
   useEffect(() => { // choosing an edit mode shows its tools; leaving it brings back the general tab
-    const edit = EDIT_MODES.includes(s.mode)
+    const edit = EDIT_MODES.includes(mode)
     useUI.getState().setSheetTab(edit ? 'tools' : 'general')
     if (edit) useUI.getState().setToolsOpen(true)
-  }, [s.mode])
+  }, [mode])
   useEffect(() => {
     const q = new URLSearchParams(location.search)
     const md = q.get('mode'); if (md) useStore.getState().setMode(md as never)
@@ -183,14 +197,14 @@ export default function App() {
 
   return (
     <div className="app">
-      <Canvas frameloop={u.fps ? 'never' : walk || fly ? 'always' : 'demand'} shadows={q !== 'low' ? 'percentage' : false} dpr={u.res ? Math.max(0.4, Math.min(2, (window.devicePixelRatio || 1) * u.res)) : DPR[q]} camera={{ position: [cx + 6, 9, cz + 9], fov: 50, near: 0.05, far: 5000 }}
+      <Canvas frameloop={fps ? 'never' : walk || fly ? 'always' : 'demand'} shadows={q !== 'low' ? 'percentage' : false} dpr={res ? Math.max(0.4, Math.min(2, (window.devicePixelRatio || 1) * res)) : DPR[q]} camera={{ position: [cx + 6, 9, cz + 9], fov: 50, near: 0.05, far: 5000 }}
         gl={{ toneMapping: THREE.NoToneMapping, antialias: false, preserveDrawingBuffer: true }}
-        onPointerMissed={() => s.select(null)}>
-        {(view2d || env === 'off' || q === 'low') && <color attach="background" args={[u.theme === 'dark' ? '#1a1f27' : '#dfe6ee']} />}
+        onPointerMissed={() => useStore.getState().select(null)}>
+        {(view2d || env === 'off' || q === 'low') && <color attach="background" args={[theme === 'dark' ? '#1a1f27' : '#dfe6ee']} />}
         <Tone low={q === 'low'} />
         <FreezeShadows />
-        {u.fps > 0 && <FpsLimiter fps={u.fps} always={walk || fly} />}
-        {u.showFps && <FpsMeter />}
+        {fps > 0 && <FpsLimiter fps={fps} always={walk || fly} />}
+        {showFps && <FpsMeter />}
         <DebugHook />
         <Suspense fallback={null}>
           {q === 'high' && <SoftShadows size={14} samples={8} />}
@@ -204,15 +218,16 @@ export default function App() {
             <Lightformer form="rect" intensity={0.9} position={[0, -6, 0]} rotation-x={-Math.PI / 2} scale={[24, 24, 1]} color="#f3e9dc" />
           </Environment>}
           <hemisphereLight args={['#ffffff', '#cfc6b8', q === 'low' ? 1.5 : view2d ? 0.5 : env === 'night' ? 0.12 : 0.55]} />
-          {q !== 'low' && <SunLight env={view2d ? 'off' : env} cx={cx} cz={cz} />}
+          {q !== 'low' && <SunLight env={view2d ? 'off' : env} cx={cx} cz={cz} quality={q} />}
           {!view2d && env !== 'off' && q !== 'low' && <Outside env={env} cx={cx} cz={cz} fw={fw} fh={fh} />}
           <Flat ceiling={walk} opacity={op} />
-          <Electrics view2d={view2d} ceiling2d={u.ceiling2d} />
-          <Furniture editable={s.mode === 'furniture' || s.mode === 'move'} movable={s.mode === 'move'} opacity={op} />
-          {u.overlay && <PlanOverlay key={s.flatId} opacity={1 - u.flatOpacity} />}
-          {s.mode === 'walls' && <WallHandles />}
-          {s.mode === 'dims' && <Dimensions />}
-          {s.mode === 'rooms' && <RoomsLayer />}
+          <Electrics view2d={view2d} ceiling2d={ceiling2d} />
+          <Furniture editable={mode === 'furniture' || mode === 'move' || mode === 'dims'} movable={mode === 'move'} showBad={mode === 'furniture' || mode === 'move'} opacity={op} />
+          {overlay && <PlanOverlay key={flatId} opacity={1 - flatOpacity} />}
+          {mode === 'walls' && <WallHandles />}
+          {mode === 'dims' && <Dimensions />}
+          {(mode === 'furniture' || mode === 'move' || mode === 'dims') && <ItemWallDims />}
+          {mode === 'rooms' && <RoomsLayer />}
           <DragPlane />
           <Guides />
         </Suspense>
@@ -220,15 +235,14 @@ export default function App() {
           ? <Walker />
           : fly
           ? <Flyer />
-          : <OrbitControls key={s.flatId + view2d + (wallView?.label ?? '') + u.ortho} makeDefault enabled={!s.drag && !tracerOpen} target={wallView ? [(wallView.a[0] + wallView.b[0]) / 2, 1.35, (wallView.a[1] + wallView.b[1]) / 2] : [cx, 0, cz]} maxPolarAngle={Math.PI / 2.02}
+          : <OrbitControls key={flatId + view2d + (wallView?.label ?? '') + ortho} makeDefault enabled={!dragging && !tracerOpen} target={wallView ? [(wallView.a[0] + wallView.b[0]) / 2, 1.35, (wallView.a[1] + wallView.b[1]) / 2] : [cx, 0, cz]} maxPolarAngle={Math.PI / 2.02}
               enableRotate={!view2d && !wallView} screenSpacePanning
               mouseButtons={view2d ? { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN } : undefined}
               touches={view2d ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN } : undefined} />}
-        {view2d && <View2D key={s.flatId} cx={cx} cz={cz} w={fw} h={fh} />}
+        {view2d && <View2D key={flatId} cx={cx} cz={cz} w={fw} h={fh} />}
         {wallView && <WallView key={wallView.label} w={wallView} />}
-        {u.ortho && !view2d && !wallView && !walk && !fly && <OrbitOrtho key={s.flatId} cx={cx} cz={cz} w={fw} h={fh} />}
-        <Keys />
-        <CameraRig cx={cx} cz={cz} k={s.flatId} off={view2d} still={walk || fly} />
+        {ortho && !view2d && !wallView && !walk && !fly && <OrbitOrtho key={flatId} cx={cx} cz={cz} w={fw} h={fh} />}
+        <CameraRig cx={cx} cz={cz} k={flatId} off={view2d} still={walk || fly} />
         <ViewShift />
         {q !== 'low' && (
           <EffectComposer multisampling={0}>
@@ -241,8 +255,9 @@ export default function App() {
       </Canvas>
 
       {walk && !isTouch && <><div className="cross" /><div className="cross-hint">E: open door · use switch</div></>}
-      {u.showFps && <div id="fps-meter" style={{ position: 'fixed', left: 10, bottom: 10, zIndex: 30, padding: '3px 8px', borderRadius: 8, background: 'rgba(0,0,0,.6)', color: '#7CFC9A', font: '600 12px monospace', pointerEvents: 'none' }}>…</div>}
+      {showFps && <div id="fps-meter" style={{ position: 'fixed', left: 10, bottom: 10, zIndex: 30, padding: '3px 8px', borderRadius: 8, background: 'rgba(0,0,0,.6)', color: '#7CFC9A', font: '600 12px monospace', pointerEvents: 'none' }}>…</div>}
       <McpHost />
+      <Keys />
       <TopBar />
       <Sidebar />
       <ToolPanel />
@@ -252,7 +267,7 @@ export default function App() {
       <Toast />
       <Help />
       <AiConnect />
-      {tracerOpen && <Tracer key={u.tracer!.id ?? 'new'} />}
+      {tracerOpen && <Tracer key={tracer!.id ?? 'new'} />}
     </div>
   )
 }

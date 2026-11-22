@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useStore } from '../store'
 import { useUI } from './uiStore'
 import { Icon } from './Icon'
-import { rooms as planRooms, openingsOf, PX_PER_M, walls as baseWalls } from '../plan'
+import { rooms as planRooms, openingsOf, PX_PER_M, walls as baseWalls, doorSwing } from '../plan'
 import { FLOORS, WALL_COLORS, DEFAULT_WALL, defaultFloor, type FloorId } from '../materials'
 import { OPENING_PRESETS } from '../openingTools'
 import { doorKey } from '../wiring'
@@ -90,17 +90,92 @@ export function StylePanel() {
   </>)
 }
 
-export function OpeningsPanel() {
+/** Editor card for the currently selected window or door (shared by Doors mode and Walls mode). */
+export function SelectedOpeningCard() {
   const s = useStore()
-  const u = useUI()
   const sel = s.selOpening
   const w = sel ? [...baseWalls, ...s.customWalls].find((q) => q.id === sel.wall) : undefined
   const o = w && sel ? openingsOf(w, s.nodes).find((q) => q.i === sel.i) : undefined
-  const A = w ? s.nodes[w.a] : null, B = w ? s.nodes[w.b] : null
+  if (!o || !w || !sel) return null
+  const A = s.nodes[w.a], B = s.nodes[w.b]
   const L = A && B ? Math.hypot(B[0] - A[0], B[1] - A[1]) : 0
-  const key = w && sel ? doorKey(w.id, sel.i) : ''
+  const key = doorKey(w.id, sel.i)
   const door = s.doorState[key]
-  const dState = (door?.state ?? (w && w.thick / PX_PER_M >= 0.21 ? 0 : 1)) as 0 | 1 | 2
+  const dState = (door?.state ?? (w.thick / PX_PER_M >= 0.21 ? 0 : 1)) as 0 | 1 | 2
+  return (
+    <div className="sel">
+      <b>{o.kind === 'door' ? (o.glass ? 'Glazed door' : 'Door') : o.sill < 0.3 && o.top - o.sill > 2 ? 'Full-height glazing' : 'Window'}</b>
+      {o.kind === 'door' && <DoorSwitch value={dState} onChange={(v) => s.setDoor(key, { state: v })} />}
+      {o.kind === 'door' && (
+        <div className="row2">
+          <button className="btn sm" onClick={() => s.setDoor(key, { hinge: (door?.hinge ?? 'a') === 'a' ? 'b' : 'a' })}>↔ Flip hinge</button>
+          <button className="btn sm" onClick={() => s.setDoor(key, { swing: (doorSwing(w, o, s.nodes, s.doorState) === 1 ? -1 : 1) })}>⤾ Change opening side</button>
+        </div>
+      )}
+      <label className="slider">Width {cm((o.to - o.from) / PX_PER_M)} cm
+        <input type="range" min={30} max={Math.round((L / PX_PER_M) * 100 - 30)} step={5} value={cm((o.to - o.from) / PX_PER_M)} onChange={(e) => s.editOpening(w.id, sel.i, { width: +e.target.value / 100 })} />
+      </label>
+      <label className="slider">Position {((o.from + o.to) / 2 / PX_PER_M).toFixed(2)} m along the wall
+        <input type="range" min={0} max={Math.round((L / PX_PER_M) * 100)} step={5} value={Math.round(((o.from + o.to) / 2 / PX_PER_M) * 100)} onChange={(e) => s.editOpening(w.id, sel.i, { centre: +e.target.value / 100 })} />
+      </label>
+      {o.kind === 'window' && (<>
+        <div className="lbl-row"><span>Window style</span></div>
+        <div className="chips">
+          <button className={o.sill >= 0.6 && (o.to - o.from) / PX_PER_M < 1.6 ? 'on' : ''} onClick={() => s.editOpening(w.id, sel.i, { sill: 0.9, top: 2.1, width: Math.min(1.2, (L - 0.3 * PX_PER_M) / PX_PER_M) })}>Standard</button>
+          <button className={o.sill >= 0.6 && (o.to - o.from) / PX_PER_M >= 1.6 ? 'on' : ''} onClick={() => s.editOpening(w.id, sel.i, { sill: 0.9, top: 2.1, width: 1.8 })}>Wide</button>
+          <button className={o.sill > 0.02 && o.sill <= 0.3 && o.top >= 2.2 ? 'on' : ''} onClick={() => s.editOpening(w.id, sel.i, { sill: 0.1, top: 2.45, width: Math.max((o.to - o.from) / PX_PER_M, 2.4) })}>Panoramic</button>
+          <button className={o.sill <= 0.02 && o.top >= 2.45 ? 'on' : ''} onClick={() => s.editOpening(w.id, sel.i, { sill: 0, top: 2.55, width: 'wall' })}>Full wall</button>
+        </div>
+        <label className="slider">Sill height {cm(o.sill)} cm
+          <input type="range" min={0} max={160} step={5} value={cm(o.sill)} onChange={(e) => s.editOpening(w.id, sel.i, { sill: +e.target.value / 100 })} />
+        </label>
+        <label className="slider">Top {cm(o.top)} cm
+          <input type="range" min={90} max={265} step={5} value={cm(o.top)} onChange={(e) => s.editOpening(w.id, sel.i, { top: +e.target.value / 100 })} />
+        </label>
+      </>)}
+      {o.kind === 'door' && (
+        <label className="check"><input type="checkbox" checked={!!o.glass} onChange={(e) => s.editOpening(w.id, sel.i, { glass: e.target.checked })} /> glazed leaf</label>
+      )}
+      <div className="row2">
+        <button className="btn sm" onClick={() => s.editOpening(w.id, sel.i, o.kind === 'door' ? { kind: 'window', sill: 0.9, top: 2.1 } : { kind: 'door', sill: 0, top: 2.05 })}>{o.kind === 'door' ? 'Make window' : 'Make door'}</button>
+        <button className="btn sm danger" onClick={() => s.removeOpening(w.id, sel.i)} title="Delete"><Icon n="trash" size={14} /> Remove</button>
+      </div>
+    </div>
+  )
+}
+
+/** Clickable list of all windows & doors with quick remove buttons (shared by Doors mode and Walls mode). */
+export function OpeningsList() {
+  const s = useStore()
+  const sel = s.selOpening
+  return (
+    <div className="sel">
+      <b>Windows &amp; doors</b>
+      <div className="flats">
+        {[...baseWalls, ...s.customWalls].flatMap((wl) => openingsOf(wl, s.nodes).map((op) => ({ wl, op }))).map(({ wl, op }) => {
+          const idx = op.i ?? 0
+          const active = sel?.wall === wl.id && sel.i === idx
+          const lbl = op.kind === 'door' ? (op.glass ? 'Glazed door' : 'Door') : op.sill <= 0.3 && op.top >= 2.2 ? 'Panoramic' : 'Window'
+          return (
+            <div key={wl.id + ':' + idx} className={'flat' + (active ? ' on' : '')}>
+              <button className="flat-main" onClick={() => { s.select(null); s.selectOpening({ wall: wl.id, i: idx }) }}>
+                <b>{lbl} · {cm((op.to - op.from) / PX_PER_M)}×{cm(op.top - op.sill)} cm</b>
+                <small>wall {wl.id}{op.kind === 'window' ? ` · sill ${cm(op.sill)} cm` : ''}</small>
+              </button>
+              <div className="flat-act">
+                <button className="ibtn danger" title="Remove" onClick={() => s.removeOpening(wl.id, idx)}><Icon n="trash" size={14} /></button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+export function OpeningsPanel() {
+  const s = useStore()
+  const u = useUI()
   void u
   return (<>
     <p className="hint">Click a window or door to edit it, or choose Add and click a wall.</p>
@@ -114,39 +189,8 @@ export function OpeningsPanel() {
       </div>
       <p className="hint">Click a wall to place it.</p>
     </>)}
-    {o && w && (
-      <div className="sel">
-        <b>{o.kind === 'door' ? (o.glass ? 'Glazed door' : 'Door') : o.sill < 0.3 && o.top - o.sill > 2 ? 'Full-height glazing' : 'Window'}</b>
-        {o.kind === 'door' && <DoorSwitch value={dState} onChange={(v) => s.setDoor(key, { state: v })} />}
-        {o.kind === 'door' && (
-          <div className="row2">
-            <button className="btn sm" onClick={() => s.setDoor(key, { hinge: (door?.hinge ?? 'a') === 'a' ? 'b' : 'a' })}>↔ Flip hinge</button>
-            <button className="btn sm" onClick={() => s.setDoor(key, { swing: (door?.swing ?? 1) === 1 ? -1 : 1 })}>⤾ Swing other way</button>
-          </div>
-        )}
-        <label className="slider">Width {cm((o.to - o.from) / PX_PER_M)} cm
-          <input type="range" min={30} max={Math.round((L / PX_PER_M) * 100 - 30)} step={5} value={cm((o.to - o.from) / PX_PER_M)} onChange={(e) => s.editOpening(w.id, sel!.i, { width: +e.target.value / 100 })} />
-        </label>
-        <label className="slider">Position {((o.from + o.to) / 2 / PX_PER_M).toFixed(2)} m along the wall
-          <input type="range" min={0} max={Math.round((L / PX_PER_M) * 100)} step={5} value={Math.round(((o.from + o.to) / 2 / PX_PER_M) * 100)} onChange={(e) => s.editOpening(w.id, sel!.i, { centre: +e.target.value / 100 })} />
-        </label>
-        {o.kind === 'window' && (<>
-          <label className="slider">Sill height {cm(o.sill)} cm
-            <input type="range" min={0} max={160} step={5} value={cm(o.sill)} onChange={(e) => s.editOpening(w.id, sel!.i, { sill: +e.target.value / 100 })} />
-          </label>
-          <label className="slider">Top {cm(o.top)} cm
-            <input type="range" min={90} max={265} step={5} value={cm(o.top)} onChange={(e) => s.editOpening(w.id, sel!.i, { top: +e.target.value / 100 })} />
-          </label>
-        </>)}
-        {o.kind === 'door' && (
-          <label className="check"><input type="checkbox" checked={!!o.glass} onChange={(e) => s.editOpening(w.id, sel!.i, { glass: e.target.checked })} /> glazed leaf</label>
-        )}
-        <div className="row2">
-          <button className="btn sm" onClick={() => s.editOpening(w.id, sel!.i, o.kind === 'door' ? { kind: 'window', sill: 0.9, top: 2.1 } : { kind: 'door', sill: 0, top: 2.05 })}>{o.kind === 'door' ? 'Make window' : 'Make door'}</button>
-          <button className="btn sm danger" onClick={() => s.removeOpening(w.id, sel!.i)}><Icon n="trash" size={14} /> Remove</button>
-        </div>
-      </div>
-    )}
+    <SelectedOpeningCard />
+    <OpeningsList />
     <div className="sel"><b>Whole flat</b><DoorLightControls /></div>
     <button className="btn" onClick={s.regenElectrics}>Re-place lights &amp; switches</button>
   </>)

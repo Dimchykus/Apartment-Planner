@@ -1,14 +1,16 @@
-import { useRef, type ReactNode } from 'react'
+import { memo, useMemo, useRef, type ReactNode } from 'react'
 import { useUI, isTouch } from './uiStore'
 import { Icon } from './Icon'
 import { useStore, shareLink, CATALOG, type FType } from '../store'
+import { isWallMounted } from '../catalog'
 import { FLATS, BUILTIN_IDS } from '../flats'
 import { ENVS } from '../Outside'
-import { roomAreas, totalArea, STATED_TOTAL, PX_PER_M, rooms as planRooms } from '../plan'
+import { roomAreas, totalArea, STATED_TOTAL, PX_PER_M, insetRoom, rooms as planRooms } from '../plan'
+import { roomSize } from '../Dims'
 import { kindInfo } from '../roomkinds'
 import { misplaced } from '../autofurnish'
 import { CriteriaPanel, SpaceSummary, RoomsPanel, FurnPanel } from './Panels'
-import { StylePanel, OpeningsPanel, DoorLightControls } from './StylePanels'
+import { StylePanel, OpeningsPanel, DoorLightControls, SelectedOpeningCard, OpeningsList } from './StylePanels'
 import { AiPanel } from './AiPanel'
 import { DimsPanel } from './DimsPanel'
 import { useAI } from '../ai/aiStore'
@@ -48,27 +50,37 @@ function ProjectionSwitch() {
 }
 
 /** Top-down plan view, or an elevation view of one wall: handy for lining things up. */
-function ViewTools() {
-  const s = useStore()
-  const u = useUI()
-  const edges = describeRooms(s.nodes, s.customWalls, s.roomKinds).flatMap((r) => r.edges.filter((e) => e.len >= 0.8).map((e) => ({ r, e })))
-  const cur = u.wallView ? edges.findIndex(({ e }) => u.wallView!.label === e.i + '|' + e.from.join()) : -1
+const ViewTools = memo(function ViewTools() {
+  const nodes = useStore((s) => s.nodes)
+  const customWalls = useStore((s) => s.customWalls)
+  const roomKinds = useStore((s) => s.roomKinds)
+  const flatId = useStore((s) => s.flatId)
+  const on2d = useUI((u) => u.on2d)
+  const wallView = useUI((u) => u.wallView)
+  const setWallView = useUI((u) => u.setWallView)
+  const setOn2d = useUI((u) => u.setOn2d)
+  const edges = useMemo(
+    () => describeRooms(nodes, customWalls, roomKinds).flatMap((r) => r.edges.filter((e) => e.len >= 0.8).map((e) => ({ r, e }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodes, customWalls, roomKinds, flatId],
+  )
+  const cur = wallView ? edges.findIndex(({ e }) => wallView.label === e.i + '|' + e.from.join()) : -1
   return (
     <div className="sel">
       <b>Align</b>
       <div className="seg">
-        <button className={!u.on2d && !u.wallView ? 'on' : ''} onClick={() => { u.setWallView(null); u.setOn2d(false) }}>3D</button>
-        <button className={u.on2d && !u.wallView ? 'on' : ''} onClick={() => { u.setWallView(null); u.setOn2d(true) }}>2D plan</button>
-        <button className={u.wallView ? 'on' : ''} onClick={() => { const f = edges[0]; if (f) u.setWallView({ a: f.e.from, b: f.e.to, n: f.e.normal, label: f.e.i + '|' + f.e.from.join() }) }}>Wall</button>
+        <button className={!on2d && !wallView ? 'on' : ''} onClick={() => { setWallView(null); setOn2d(false) }}>3D</button>
+        <button className={on2d && !wallView ? 'on' : ''} onClick={() => { setWallView(null); setOn2d(true) }}>2D plan</button>
+        <button className={wallView ? 'on' : ''} onClick={() => { const f = edges[0]; if (f) setWallView({ a: f.e.from, b: f.e.to, n: f.e.normal, label: f.e.i + '|' + f.e.from.join() }) }}>Wall</button>
       </div>
-      {u.wallView && (
-        <select value={cur} onChange={(e) => { const f = edges[+e.target.value]; if (f) u.setWallView({ a: f.e.from, b: f.e.to, n: f.e.normal, label: f.e.i + '|' + f.e.from.join() }) }}>
+      {wallView && (
+        <select value={cur} onChange={(e) => { const f = edges[+e.target.value]; if (f) setWallView({ a: f.e.from, b: f.e.to, n: f.e.normal, label: f.e.i + '|' + f.e.from.join() }) }}>
           {edges.map(({ r, e }, k) => <option key={k} value={k}>{r.name.replace(/ \(.*\)/, '')} · wall {e.i + 1} · {e.len} m</option>)}
         </select>
       )}
     </div>
   )
-}
+})
 
 function ModePanel() {
   const s = useStore()
@@ -89,7 +101,10 @@ function ModePanel() {
     <div className="sel">
       <b>Move</b>
       <div className="seg four">
-        {([['free', 'Free'], ['x', 'X'], ['y', 'Y'], ['z', 'Z height']] as const).map(([k, l]) => <button key={k} className={s.axis === k ? 'on' : ''} onClick={() => s.setAxis(s.axis === k && k !== 'free' ? 'free' : k)} title={k === 'free' ? 'Any direction' : 'Key ' + k.toUpperCase()}>{l}</button>)}
+        {([['free', 'Free'], ['x', 'X'], ['y', 'Y'], ['z', 'Z height']] as const).map(([k, l]) => {
+          const zLocked = k === 'z' && !!sel && !isWallMounted(sel.type)
+          return <button key={k} disabled={zLocked} className={!zLocked && s.axis === k ? 'on' : ''} onClick={() => s.setAxis(s.axis === k && k !== 'free' ? 'free' : k)} title={zLocked ? 'Floor items are locked to the ground' : k === 'free' ? 'Any direction' : 'Key ' + k.toUpperCase()}>{l}</button>
+        })}
       </div>
       <button className="btn" disabled={!sel} onClick={() => sel && startCarry(sel.id)} title="Enter">Pick up (Enter) · click or Enter drops · Esc cancels</button>
     </div>
@@ -122,13 +137,15 @@ function ModePanel() {
         <button className="btn danger" onClick={() => s.removeWall(selWall.id)}><Icon n="trash" size={15} /> Delete wall</button>
       </div>
     )}
-    {tip('Outer walls are locked. Drag the blue handles; purple square moves a whole added wall.')}
+    {tip('Outer walls are locked. Drag blue handles, or click any window / door to edit or remove it.')}
+    <SelectedOpeningCard />
+    <OpeningsList />
     <button className="btn" onClick={s.resetWalls}>Reset walls</button>
   </>)
   // furniture
   const bad = s.furniture.filter((f) => misplaced(f, s.nodes, s.customWalls, s.furniture)).length
   return (<>
-    <select className="wide" value="" onChange={(e) => e.target.value && s.addFurn(e.target.value as FType)}>
+    <select className="wide" value="" onChange={(e) => { if (e.target.value) { s.addFurn(e.target.value as FType); e.target.blur() } }}>
       <option value="">+ Add furniture…</option>
       {(Object.keys(CATALOG) as FType[]).map((t) => <option key={t} value={t}>{CATALOG[t].label}</option>)}
     </select>
@@ -142,9 +159,16 @@ function ModePanel() {
 }
 
 function Overview() {
-  const s = useStore()
-  const areas = roomAreas(s.nodes, s.customWalls)
-  const tot = totalArea(s.nodes, s.customWalls)
+  const nodes = useStore((s) => s.nodes)
+  const customWalls = useStore((s) => s.customWalls)
+  const roomKinds = useStore((s) => s.roomKinds)
+  const flatId = useStore((s) => s.flatId)
+  const { areas, tot, sizes } = useMemo(() => ({
+    areas: roomAreas(nodes, customWalls),
+    tot: totalArea(nodes, customWalls),
+    sizes: Object.fromEntries(planRooms.map((r) => [r.id, roomSize(insetRoom(r, nodes))])),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [nodes, customWalls, flatId])
   const diff = STATED_TOTAL ? tot.living - STATED_TOTAL : 0
   return (<>
     <div className="big">
@@ -153,9 +177,15 @@ function Overview() {
     </div>
     <table className="areas">
       <tbody>
-        {areas.map(({ room, area }) => (
-          <tr key={room.id}><td>{s.roomKinds[room.id] ? kindInfo(s.roomKinds[room.id]).label : room.name}</td><td>{area.toFixed(1)}{room.stated ? <i> / {room.stated.toFixed(1)}</i> : null}</td></tr>
-        ))}
+        {areas.map(({ room, area }) => {
+          const sz = sizes[room.id]
+          return (
+            <tr key={room.id}>
+              <td>{roomKinds[room.id] ? kindInfo(roomKinds[room.id]).label : room.name} <small className="muted">{sz.w.toFixed(2)}×{sz.d.toFixed(2)} m</small></td>
+              <td>{area.toFixed(1)}{room.stated ? <i> / {room.stated.toFixed(1)}</i> : null}</td>
+            </tr>
+          )
+        })}
       </tbody>
     </table>
     <small className="muted">net area without walls{planRooms.some((r) => r.stated) ? ' / figure on the plan' : ''} · full loggia: {tot.gross.toFixed(1)} m²</small>
@@ -169,6 +199,13 @@ function Scene() {
     <label className="row">Time of day
       <select value={u.env} onChange={(e) => u.setEnv(e.target.value as typeof u.env)}>{ENVS.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}</select>
     </label>
+    <label className="slider">Flat floor: {u.floor} / {u.totalFloors}
+      <input type="range" min={1} max={25} step={1} value={u.floor} onChange={(e) => u.setFloor(+e.target.value)} />
+    </label>
+    <label className="slider">Building floors: {u.totalFloors}
+      <input type="range" min={1} max={25} step={1} value={u.totalFloors} onChange={(e) => u.setTotalFloors(+e.target.value)} />
+    </label>
+    <label className="check"><input type="checkbox" checked={u.parking} onChange={(e) => u.setParking(e.target.checked)} /> Parking &amp; cars around building</label>
     <div className="lbl-row"><span>Orbit camera</span></div>
     <ProjectionSwitch />
     <div className="lbl-row"><span>Graphics mode</span></div>
@@ -262,11 +299,12 @@ const narrow = () => typeof window !== 'undefined' && window.innerWidth < 760
 
 /** The part of the menu that is the same in every mode: flat, overview, scene, my flats, share. */
 function GeneralCards() {
-  const s = useStore()
-  const editing = EDIT_MODES.includes(s.mode)
+  const mode = useStore((s) => s.mode)
+  const verCount = useStore((s) => s.versions.length)
+  const editing = EDIT_MODES.includes(mode)
   return (<>
     <StageBanner />
-    <Card id="versions" title="Furniture layouts" icon="layers" badge={<em className="pill">{s.versions.length}</em>}><VersionsPanel /></Card>
+    <Card id="versions" title="Furniture layouts" icon="layers" badge={<em className="pill">{verCount}</em>}><VersionsPanel /></Card>
     {!editing && <Card id="controls" title="How to move around" icon="orbit"><ModePanel /></Card>}
     <Card id="overview" title="Overview" icon="home"><Overview /></Card>
     <Card id="scene" title="Scene & view" icon="sun" dflt={false}><Scene /></Card>
@@ -277,38 +315,45 @@ function GeneralCards() {
 
 /** Tools that only make sense in the current edit mode. */
 function ToolCards() {
-  const s = useStore()
+  const mode = useStore((s) => s.mode)
   return (<>
-    {s.mode === 'furniture' && <Card id="ai" title="AI furnish (Ollama)" icon="sparkles"><AiPanel /></Card>}
+    {mode === 'furniture' && <Card id="ai" title="AI furnish (Ollama)" icon="sparkles"><AiPanel /></Card>}
     <ModePanel />
   </>)
 }
 
 export function Sidebar() {
-  const u = useUI()
-  const s = useStore()
+  const menuOpen = useUI((s) => s.menuOpen)
+  const setMenuOpen = useUI((s) => s.setMenuOpen)
+  const sheetFull = useUI((s) => s.sheetFull)
+  const setSheetFull = useUI((s) => s.setSheetFull)
+  const sheetTab = useUI((s) => s.sheetTab)
+  const setSheetTab = useUI((s) => s.setSheetTab)
+  const mode = useStore((s) => s.mode)
+  const flatId = useStore((s) => s.flatId)
+  const switchFlat = useStore((s) => s.switchFlat)
   useUI((x) => x.flatsVersion)
-  const hasTools = EDIT_MODES.includes(s.mode)
+  const hasTools = EDIT_MODES.includes(mode)
   const phone = narrow()
-  const tab = phone && hasTools ? u.sheetTab : 'general'
-  const [title] = MODE_TITLES[s.mode] ?? ['Tools']
+  const tab = phone && hasTools ? sheetTab : 'general'
+  const [title] = MODE_TITLES[mode] ?? ['Tools']
   return (
-    <aside className={'side' + (u.menuOpen ? '' : ' closed') + (u.sheetFull ? ' full' : '')} aria-label="Menu">
+    <aside className={'side' + (menuOpen ? '' : ' closed') + (sheetFull ? ' full' : '')} aria-label="Menu">
       <header className="side-h">
         <div className="logo"><Icon n="home" size={18} /></div>
         <div className="side-t"><b>Flat Planner</b><small>3D layouts for your new home</small></div>
-        <button className="ibtn" onClick={() => u.setMenuOpen(false)} title="Hide menu (H)"><Icon n="left" /></button>
+        <button className="ibtn" onClick={() => setMenuOpen(false)} title="Hide menu (H)"><Icon n="left" /></button>
       </header>
-      <button className="grab-handle" aria-label="Expand or collapse" onClick={() => u.setSheetFull(!u.sheetFull)}><i /></button>
+      <button className="grab-handle" aria-label="Expand or collapse" onClick={() => setSheetFull(!sheetFull)}><i /></button>
       {phone && hasTools && (
         <div className="seg tabs">
-          <button className={tab === 'general' ? 'on' : ''} onClick={() => u.setSheetTab('general')}>General</button>
-          <button className={tab === 'tools' ? 'on' : ''} onClick={() => u.setSheetTab('tools')}>{title}</button>
+          <button className={tab === 'general' ? 'on' : ''} onClick={() => setSheetTab('general')}>General</button>
+          <button className={tab === 'tools' ? 'on' : ''} onClick={() => setSheetTab('tools')}>{title}</button>
         </div>
       )}
       {tab === 'general' && (
         <div className="flat-pick">
-          <select value={s.flatId} onChange={(e) => s.switchFlat(e.target.value)} aria-label="Flat">
+          <select value={flatId} onChange={(e) => switchFlat(e.target.value)} aria-label="Flat">
             <optgroup label="Examples">{FLATS.filter((f) => BUILTIN_IDS.has(f.id)).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</optgroup>
             {FLATS.some((f) => !BUILTIN_IDS.has(f.id)) && <optgroup label="My flats">{FLATS.filter((f) => !BUILTIN_IDS.has(f.id)).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}</optgroup>}
           </select>
@@ -321,16 +366,17 @@ export function Sidebar() {
 
 /** Right-hand panel: only for the edit modes (Walls, Furniture, Move, Rooms, Style, Doors, Sizes). On phones these tools are a tab of the bottom sheet. */
 export function ToolPanel() {
-  const u = useUI()
-  const s = useStore()
-  const [title, icon] = MODE_TITLES[s.mode] ?? ['Tools', 'sliders']
-  if (!EDIT_MODES.includes(s.mode) || narrow()) return null
+  const toolsOpen = useUI((s) => s.toolsOpen)
+  const setToolsOpen = useUI((s) => s.setToolsOpen)
+  const mode = useStore((s) => s.mode)
+  const [title, icon] = MODE_TITLES[mode] ?? ['Tools', 'sliders']
+  if (!EDIT_MODES.includes(mode) || narrow()) return null
   return (
-    <aside className={'side tools' + (u.toolsOpen ? '' : ' closed')} aria-label={title}>
+    <aside className={'side tools' + (toolsOpen ? '' : ' closed')} aria-label={title}>
       <header className="side-h">
         <div className="logo tool"><Icon n={icon} size={18} /></div>
         <div className="side-t"><b>{title}</b><small>tools for this mode</small></div>
-        <button className="ibtn" onClick={() => u.setToolsOpen(false)} title="Hide tools"><Icon n="right" /></button>
+        <button className="ibtn" onClick={() => setToolsOpen(false)} title="Hide tools"><Icon n="right" /></button>
       </header>
       <div className="side-body"><ToolCards /></div>
     </aside>
