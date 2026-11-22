@@ -394,6 +394,7 @@ export const useStore = create<State>((set) => ({
       const item = f(id, type, m(cx), m(cy))
       if (type === 'shelf') item.y = 1.5
       if (type === 'tv' || type === 'mirror') item.y = 0.9
+      if (type === 'towelWarmer') item.y = 1.0
       if (type === 'painting') item.y = 1.3
       if (type === 'ac') item.y = 2.25
       const carryDrag = { kind: 'furn' as const, id, dx: 0, dz: 0, carry: true, isNew: true, sx: item.x, sz: item.z, sy: item.y ?? 0, cy: 0 }
