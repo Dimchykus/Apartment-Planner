@@ -4,7 +4,7 @@ import { useThree, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import { m, PX_PER_M, editable, snapPoint, rooms, insetRoom, type Pt } from './plan'
 import { useStore, useAllWalls, getAllWalls, CATALOG, type Furn } from './store'
-import { sizeOf } from './catalog'
+import { sizeOf, isWallMounted } from './catalog'
 import { useUI } from './ui/uiStore'
 import { misplaced, overflowZones, type OverflowZone } from './autofurnish'
 import { Model, FurnOpacity, FurnFinish } from './Models'
@@ -210,7 +210,10 @@ export function DragPlane() {
       const wv = useUI.getState().wallView
 
       if (d.kind === 'furn' && axis === 'z' && !wv) {
-        st.patchFurn(d.id, { y: Math.max(0, Math.min(2.4, snap1((d.sy ?? 0) + ((d.cy ?? 0) - ev.clientY) * 0.006))) })
+        const f = st.furniture.find((q) => q.id === d.id)
+        if (f && isWallMounted(f.type)) {
+          st.patchFurn(d.id, { y: Math.max(0, Math.min(2.4, snap1((d.sy ?? 0) + ((d.cy ?? 0) - ev.clientY) * 0.006))) })
+        }
         return
       }
 
@@ -241,7 +244,7 @@ export function DragPlane() {
         const off = (d.sx! - wv.a[0]) * wv.n[0] + (d.sz! - wv.a[1]) * wv.n[1]
         const t = (_hit.x - wv.a[0]) * ux + (_hit.z - wv.a[1]) * uz + d.dx
         if (axis !== 'z') st.moveFurn(d.id, snap1(wv.a[0] + ux * t + wv.n[0] * off), snap1(wv.a[1] + uz * t + wv.n[1] * off))
-        if (axis !== 'x' && (f.y !== undefined || CATALOG[f.type].h < 0.5 || f.type === 'shelf' || f.type === 'tv')) {
+        if (axis !== 'x' && isWallMounted(f.type)) {
           st.patchFurn(d.id, { y: Math.max(0, Math.min(2.4, snap1(_hit.y + d.dz))) })
         }
         return
@@ -608,7 +611,12 @@ export function Keys() {
       if (s.drag?.carry) { if (e.key === 'Enter') { endCarry(false); return } if (e.key === 'Escape') { endCarry(true); return } }
       if (s.mode === 'move' && !typing && !e.ctrlKey && !e.metaKey) {
         const ax = ({ KeyX: 'x', KeyY: 'y', KeyZ: 'z' } as Record<string, 'x' | 'y' | 'z'>)[e.code]
-        if (ax) { s.setAxis(s.axis === ax ? 'free' : ax); return }
+        if (ax) {
+          const selF = s.selected ? s.furniture.find((q) => q.id === s.selected) : undefined
+          if (ax === 'z' && selF && !isWallMounted(selF.type)) return // floor items stay locked on Z
+          s.setAxis(s.axis === ax ? 'free' : ax)
+          return
+        }
         if (e.key === 'Enter' && s.selected && !s.drag) { startCarry(s.selected); return }
       }
       if ((e.ctrlKey || e.metaKey) && e.code === 'KeyD' && s.selected) { e.preventDefault(); s.duplicateFurn(s.selected); return }

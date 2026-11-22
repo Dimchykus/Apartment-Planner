@@ -2,6 +2,7 @@ import { memo, useMemo, useRef, type ReactNode } from 'react'
 import { useUI, isTouch } from './uiStore'
 import { Icon } from './Icon'
 import { useStore, shareLink, CATALOG, type FType } from '../store'
+import { isWallMounted } from '../catalog'
 import { FLATS, BUILTIN_IDS } from '../flats'
 import { ENVS } from '../Outside'
 import { roomAreas, totalArea, STATED_TOTAL, PX_PER_M, insetRoom, rooms as planRooms } from '../plan'
@@ -100,7 +101,10 @@ function ModePanel() {
     <div className="sel">
       <b>Move</b>
       <div className="seg four">
-        {([['free', 'Free'], ['x', 'X'], ['y', 'Y'], ['z', 'Z height']] as const).map(([k, l]) => <button key={k} className={s.axis === k ? 'on' : ''} onClick={() => s.setAxis(s.axis === k && k !== 'free' ? 'free' : k)} title={k === 'free' ? 'Any direction' : 'Key ' + k.toUpperCase()}>{l}</button>)}
+        {([['free', 'Free'], ['x', 'X'], ['y', 'Y'], ['z', 'Z height']] as const).map(([k, l]) => {
+          const zLocked = k === 'z' && !!sel && !isWallMounted(sel.type)
+          return <button key={k} disabled={zLocked} className={!zLocked && s.axis === k ? 'on' : ''} onClick={() => s.setAxis(s.axis === k && k !== 'free' ? 'free' : k)} title={zLocked ? 'Floor items are locked to the ground' : k === 'free' ? 'Any direction' : 'Key ' + k.toUpperCase()}>{l}</button>
+        })}
       </div>
       <button className="btn" disabled={!sel} onClick={() => sel && startCarry(sel.id)} title="Enter">Pick up (Enter) · click or Enter drops · Esc cancels</button>
     </div>

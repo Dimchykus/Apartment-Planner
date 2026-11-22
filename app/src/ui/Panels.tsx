@@ -5,7 +5,7 @@ import { CRITERIA_KEYS, CRITERIA_PRESETS, presetOf } from '../criteria'
 import { rooms as planRooms, doorSwing } from '../plan'
 import { useStore, CATALOG, type Furn } from '../store'
 import { useUI } from './uiStore'
-import { PRESETS, STYLES, FINISHES, sizeOf } from '../catalog'
+import { PRESETS, STYLES, FINISHES, sizeOf, isWallMounted } from '../catalog'
 import { itemWallDistances } from '../Dims'
 
 export const SWATCHES = ['#e9e5de', '#8d8f93', '#3a3532', '#b08a5a', '#7a5a3a', '#8aa0b5', '#6f8f72', '#b5584a', '#d8d2c6']
@@ -201,8 +201,8 @@ export function FurnPanel({ sel }: { sel: Furn }) {
       </label>
       <Slider label="Width" v={cmv(size.w)} min={wMin} max={wMax} on={(x) => patch({ w: x })} />
       <Slider label="Depth" v={cmv(size.d)} min={dMin} max={dMax} on={(x) => patch({ d: x })} />
-      {sel.type !== 'shelf' && <Slider label="Height" v={cmv(size.h)} min={hMin} max={hMax} on={(x) => patch({ h: x })} />}
-      {sel.type === 'shelf' && <Slider label="Mounted at" v={cmv(sel.y ?? 1.5)} min={30} max={220} on={(x) => patch({ y: x })} />}
+      {!isWallMounted(sel.type) && sel.type !== 'rug' && <Slider label="Height" v={cmv(size.h)} min={hMin} max={hMax} on={(x) => patch({ h: x })} />}
+      {isWallMounted(sel.type) && <Slider label="Mounted at" v={cmv(sel.y ?? (sel.type === 'ac' ? 2.25 : sel.type === 'shelf' ? 1.5 : 0.9))} min={20} max={240} on={(x) => patch({ y: x })} />}
       <div>
         {SWATCHES.map((c) => <span key={c} className="sw" style={{ background: c }} onClick={() => patch({ color: c })} />)}
         <input type="color" value={sel.color ?? cat.color} onChange={(e) => patch({ color: e.target.value })} title="Any colour" />

@@ -321,18 +321,152 @@ function GamingChair({ color }: P) {
   </>)
 }
 
+/** L-shaped sectional sofa (2.5 × 1.7 m). Back is at -z, chaise extends forward (+z) on right or left. */
+function LSofa({ color, style }: P & { style?: string }) {
+  const sgn = style === 'left' ? -1 : 1
+  return (<>
+    {/* main 3-seat section along the back (-z) */}
+    <B p={[0, 0.2, -0.38]} s={[2.5, 0.28, 0.94]} c={color} r={0.05} />
+    <B p={[0, 0.58, -0.74]} s={[2.5, 0.6, 0.22]} c={color} r={0.08} />
+    {/* chaise lounge extending forward on sgn side */}
+    <B p={[sgn * 0.78, 0.2, 0.45]} s={[0.94, 0.28, 0.8]} c={color} r={0.05} />
+    <B p={[sgn * 0.78, 0.42, 0.42]} s={[0.78, 0.16, 0.78]} c={color} r={0.06} rough={0.95} />
+    {/* armrests */}
+    <B p={[-sgn * 1.17, 0.42, -0.38]} s={[0.16, 0.3, 0.88]} c={color} r={0.06} />
+    <B p={[sgn * 1.17, 0.42, 0.0]} s={[0.16, 0.3, 1.55]} c={color} r={0.06} />
+    {/* seat + back cushions */}
+    {[-0.78, 0, 0.78].map((x) => <B key={x} p={[x, 0.42, -0.32]} s={[0.74, 0.16, 0.68]} c={color} r={0.07} rough={0.95} />)}
+    {[-0.78, 0, 0.78].map((x) => <B key={'b' + x} p={[x, 0.65, -0.58]} s={[0.72, 0.42, 0.16]} c={color} r={0.07} rough={0.95} />)}
+    {/* feet */}
+    {[[-1.12, -0.76], [1.12, -0.76], [-1.12, 0.02], [sgn * 0.4, 0.78], [sgn * 1.12, 0.78]].map(([x, z], i) => (
+      <B key={i} p={[x, 0.04, z]} s={[0.05, 0.08, 0.05]} c="#222" />
+    ))}
+  </>)
+}
+
+function Ottoman({ color, style }: P & { style?: string }) {
+  const op = useContext(FurnOpacity)
+  if (style === 'round') return (<>
+    <mesh position={[0, 0.22, 0]} castShadow={op >= 0.99} receiveShadow={op >= 0.99}><cylinderGeometry args={[0.35, 0.35, 0.36, 32]} /><meshStandardMaterial color={color} roughness={0.9} transparent={op < 0.99} opacity={op} /></mesh>
+    <mesh position={[0, 0.02, 0]}><cylinderGeometry args={[0.3, 0.3, 0.04, 24]} /><meshStandardMaterial color="#2b2b2d" roughness={0.5} /></mesh>
+  </>)
+  return (<>
+    <B p={[0, 0.24, 0]} s={[0.7, 0.34, 0.7]} c={color} r={0.07} rough={0.92} />
+    {[[-0.28, -0.28], [0.28, -0.28], [-0.28, 0.28], [0.28, 0.28]].map(([x, z], i) => <B key={i} p={[x, 0.04, z]} s={[0.04, 0.08, 0.04]} c="#222" />)}
+  </>)
+}
+
+function OfficeChair({ color }: P) {
+  return (<>
+    <B p={[0, 0.48, 0.02]} s={[0.5, 0.08, 0.48]} c={color} r={0.04} rough={0.85} />
+    <B p={[0, 0.82, -0.22]} s={[0.46, 0.56, 0.06]} c={color} r={0.04} rough={0.9} />
+    {[-0.28, 0.28].map((x) => (
+      <group key={x}>
+        <B p={[x, 0.64, 0.0]} s={[0.05, 0.03, 0.28]} c="#222" r={0.01} />
+        <B p={[x, 0.56, 0.0]} s={[0.03, 0.16, 0.03]} c={METAL} metal={0.8} rough={0.3} />
+      </group>
+    ))}
+    <B p={[0, 0.28, 0]} s={[0.06, 0.32, 0.06]} c={METAL} r={0.02} metal={0.8} rough={0.3} />
+    {[0, 1, 2, 3, 4].map((i) => (
+      <group key={i} rotation={[0, (i / 5) * Math.PI * 2, 0]}>
+        <B p={[0, 0.09, 0.15]} s={[0.035, 0.025, 0.3]} c="#222" r={0.008} />
+        <mesh position={[0, 0.035, 0.29]} castShadow><sphereGeometry args={[0.03, 10, 8]} /><meshStandardMaterial color="#1a1a1d" roughness={0.6} /></mesh>
+      </group>
+    ))}
+  </>)
+}
+
+function CornerDesk({ color, style }: P & { style?: string }) {
+  const sgn = style === 'left' ? -1 : 1
+  return (<>
+    {/* main desk top along -z */}
+    <B p={[0, 0.74, -0.375]} s={[1.6, 0.04, 0.65]} c={color} r={0.01} />
+    {/* side return along sgn side */}
+    <B p={[sgn * 0.5, 0.74, 0.325]} s={[0.6, 0.04, 0.75]} c={color} r={0.01} />
+    {[[-0.75, -0.65], [0.75, -0.65], [-sgn * 0.75, -0.1], [sgn * 0.75, 0.65], [sgn * 0.24, 0.65]].map(([x, z], i) => (
+      <B key={i} p={[x, 0.36, z]} s={[0.045, 0.72, 0.045]} c="#2d2f33" metal={0.4} rough={0.4} />
+    ))}
+  </>)
+}
+
+function KitchenIsland({ color }: P) {
+  return (<>
+    <B p={[0, 0.44, -0.06]} s={[1.54, 0.86, 0.68]} c={color} r={0.01} />
+    <B p={[0, 0.9, 0]} s={[1.6, 0.04, 0.85]} c="#3b3d42" r={0.008} rough={0.3} />
+    {[-0.48, 0, 0.48].map((x) => <B key={x} p={[x, 0.44, -0.405]} s={[0.46, 0.76, 0.012]} c={color} r={0.004} rough={0.45} />)}
+    {[-0.48, 0, 0.48].map((x) => <B key={'h' + x} p={[x, 0.72, -0.42]} s={[0.14, 0.015, 0.02]} c={METAL} metal={0.9} rough={0.25} />)}
+  </>)
+}
+
+function FloorLamp({ color, style }: P & { style?: string }) {
+  if (style === 'arc') return (<>
+    <mesh position={[0, 0.03, -0.1]} castShadow><cylinderGeometry args={[0.16, 0.18, 0.06, 24]} /><meshStandardMaterial color="#2b2b2e" metalness={0.5} roughness={0.3} /></mesh>
+    <B p={[0, 0.82, -0.1]} s={[0.025, 1.56, 0.025]} c={METAL} metal={0.85} rough={0.25} />
+    <B p={[0, 1.62, 0.03]} s={[0.025, 0.025, 0.28]} c={METAL} metal={0.85} rough={0.25} />
+    <mesh position={[0, 1.48, 0.15]} castShadow><sphereGeometry args={[0.14, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.6]} /><meshStandardMaterial color={color} emissive="#ffdfa8" emissiveIntensity={0.45} roughness={0.4} /></mesh>
+  </>)
+  return (<>
+    <mesh position={[0, 0.025, 0]} castShadow><cylinderGeometry args={[0.15, 0.17, 0.05, 24]} /><meshStandardMaterial color="#2b2b2e" metalness={0.5} roughness={0.35} /></mesh>
+    <B p={[0, 0.78, 0]} s={[0.024, 1.5, 0.024]} c={METAL} metal={0.85} rough={0.25} />
+    <mesh position={[0, 1.52, 0]} castShadow><cylinderGeometry args={[0.14, 0.2, 0.34, 24, 1, true]} /><meshStandardMaterial color={color} emissive="#ffe2b0" emissiveIntensity={0.35} roughness={0.8} side={2} /></mesh>
+  </>)
+}
+
+function Plant({ color }: P) {
+  return (<>
+    <mesh position={[0, 0.18, 0]} castShadow receiveShadow><cylinderGeometry args={[0.18, 0.14, 0.36, 20]} /><meshStandardMaterial color="#c9b8a3" roughness={0.75} /></mesh>
+    <mesh position={[0, 0.35, 0]}><cylinderGeometry args={[0.165, 0.165, 0.02, 16]} /><meshStandardMaterial color="#4a3828" roughness={1} /></mesh>
+    <B p={[0, 0.62, 0]} s={[0.035, 0.55, 0.035]} c="#5a432c" r={0.01} />
+    <mesh position={[0, 0.96, 0]} castShadow><icosahedronGeometry args={[0.24, 1]} /><meshStandardMaterial color={color} roughness={0.85} flatShading /></mesh>
+    <mesh position={[0.11, 1.14, 0.06]} castShadow><icosahedronGeometry args={[0.16, 1]} /><meshStandardMaterial color={color} roughness={0.85} flatShading /></mesh>
+    <mesh position={[-0.1, 1.08, -0.07]} castShadow><icosahedronGeometry args={[0.15, 1]} /><meshStandardMaterial color={color} roughness={0.85} flatShading /></mesh>
+  </>)
+}
+
+function Rug({ color, style }: P & { style?: string }) {
+  const op = useContext(FurnOpacity)
+  if (style === 'round') return (
+    <mesh position={[0, 0.01, 0]} receiveShadow><cylinderGeometry args={[0.7, 0.7, 0.018, 40]} /><meshStandardMaterial color={color} roughness={0.98} transparent={op < 0.99} opacity={op} /></mesh>
+  )
+  return <B p={[0, 0.01, 0]} s={[2.0, 0.018, 1.4]} c={color} r={0.006} rough={0.98} />
+}
+
+function Mirror({ color, style }: P & { style?: string }) {
+  if (style === 'round') return (<>
+    <mesh position={[0, 0.7, 0]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.35, 0.35, 0.03, 32]} /><meshStandardMaterial color="#2b2b2d" metalness={0.6} roughness={0.35} /></mesh>
+    <mesh position={[0, 0.7, 0.016]} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.32, 0.32, 0.008, 32]} /><meshStandardMaterial color={color} metalness={0.95} roughness={0.06} /></mesh>
+  </>)
+  return (<>
+    <B p={[0, 0.7, 0]} s={[0.7, 1.4, 0.03]} c="#2b2b2d" r={0.008} metal={0.5} rough={0.35} />
+    <B p={[0, 0.7, 0.017]} s={[0.64, 1.34, 0.008]} c={color} r={0.003} metal={0.95} rough={0.06} />
+  </>)
+}
+
+function Ac({ color }: P) {
+  return (<>
+    <B p={[0, 0.15, 0]} s={[0.9, 0.28, 0.22]} c={color} r={0.03} rough={0.35} />
+    <B p={[0, 0.06, 0.105]} s={[0.8, 0.05, 0.012]} c="#cfd4da" r={0.005} />
+    <B p={[0.34, 0.17, 0.112]} s={[0.08, 0.03, 0.005]} c="#1e293b" r={0.002} />
+  </>)
+}
+
 export function Model({ type, color, w, low, style }: { type: FType; color: string; w?: number; low?: boolean; style?: string }) {
   switch (type) {
     case 'sofa': return <Sofa color={color} style={style} />
+    case 'lSofa': return <LSofa color={color} style={style} />
     case 'armchair': return <Armchair color={color} />
+    case 'ottoman': return <Ottoman color={color} style={style} />
     case 'coffeeTable': return <CoffeeTable color={color} style={style} />
     case 'diningTable': return <DiningTable color={color} style={style} />
     case 'chair': return <Chair color={color} style={style} />
+    case 'officeChair': return <OfficeChair color={color} />
+    case 'gamingChair': return <GamingChair color={color} />
     case 'bed': return <Bed color={color} style={style} />
     case 'nightstand': return <Nightstand color={color} />
     case 'wardrobe': return <Wardrobe color={color} w={w} style={style} />
     case 'tvUnit': return <TvUnit color={color} />
     case 'kitchen': return <Kitchen color={color} w={w} low={low} />
+    case 'kitchenIsland': return <KitchenIsland color={color} />
     case 'fridge': return <Fridge color={color} />
     case 'bathtub': return <Bathtub color={color} />
     case 'wc': return <Wc color={color} />
@@ -341,11 +475,16 @@ export function Model({ type, color, w, low, style }: { type: FType; color: stri
     case 'shower': return <Shower color={color} />
     case 'shelf': return <Shelf color={color} />
     case 'tv': return <Tv color={color} />
+    case 'mirror': return <Mirror color={color} style={style} />
+    case 'ac': return <Ac color={color} />
     case 'bookcase': return <Bookcase color={color} />
     case 'dresser': return <Dresser color={color} />
     case 'shoeCabinet': return <ShoeCabinet color={color} />
     case 'desk': return <Desk color={color} />
+    case 'cornerDesk': return <CornerDesk color={color} style={style} />
     case 'gamingDesk': return <GamingDesk color={color} />
-    case 'gamingChair': return <GamingChair color={color} />
+    case 'floorLamp': return <FloorLamp color={color} style={style} />
+    case 'plant': return <Plant color={color} />
+    case 'rug': return <Rug color={color} style={style} />
   }
 }

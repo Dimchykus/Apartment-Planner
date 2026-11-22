@@ -816,10 +816,11 @@ export function misplacedReason(f: Furn, nodes: Record<string, Pt>, customWalls:
   if (!fits) return 'sticks out of the room / into a wall'
   const z = zones([...baseWalls, ...customWalls], nodes)
   if (z.custom.some((q) => overlaps(o, q))) return 'goes through a wall you added'
-  if (y0 < 2.0 && z.doors.some((q) => overlaps(o, q))) return 'blocks a door'
-  if (y0 + h > 1.2 && f.type !== 'shower' && !(f.type === 'kitchen' && f.low) && z.windows.some((q) => overlaps(o, q))) return 'stands in front of a window'
+  if (y0 < 2.0 && f.type !== 'rug' && z.doors.some((q) => overlaps(o, q))) return 'blocks a door'
+  if (y0 + h > 1.2 && f.type !== 'shower' && f.type !== 'rug' && !(f.type === 'kitchen' && f.low) && z.windows.some((q) => overlaps(o, q))) return 'stands in front of a window'
   for (const g of others) {
     if (g.id === f.id) continue
+    if (f.type === 'rug' || g.type === 'rug') continue
     if ((f.type === 'chair' && g.type === 'diningTable') || (g.type === 'chair' && f.type === 'diningTable')) continue
     const gs = sizeOf(g), gy = g.y ?? 0
     if (y0 >= gy + gs.h - 0.02 || gy >= y0 + h - 0.02) continue // stacked / mounted at different heights
@@ -975,14 +976,14 @@ export function overflowZones(f: Furn, nodes: Record<string, Pt>, customWalls: W
     const poly = clipOBB(cs, q)
     if (poly.length >= 3) out.push({ poly, kind: 'custom', label: 'added wall', y0, y1 })
   }
-  if (y0 < 2.0) {
+  if (y0 < 2.0 && f.type !== 'rug') {
     for (const q of z.doors) {
       if (!overlaps(o, q)) continue
       const poly = clipOBB(cs, q)
       if (poly.length >= 3) out.push({ poly, kind: 'door', label: 'blocks door', y0, y1: Math.min(y1, 2.05) })
     }
   }
-  if (y1 > 1.2 && f.type !== 'shower' && !(f.type === 'kitchen' && f.low)) {
+  if (y1 > 1.2 && f.type !== 'shower' && f.type !== 'rug' && !(f.type === 'kitchen' && f.low)) {
     for (const q of z.windows) {
       if (!overlaps(o, q)) continue
       const poly = clipOBB(cs, q)
@@ -991,6 +992,7 @@ export function overflowZones(f: Furn, nodes: Record<string, Pt>, customWalls: W
   }
   for (const g of others) {
     if (g.id === f.id) continue
+    if (f.type === 'rug' || g.type === 'rug') continue
     if ((f.type === 'chair' && g.type === 'diningTable') || (g.type === 'chair' && f.type === 'diningTable')) continue
     const gs = sizeOf(g), gy = g.y ?? 0
     if (y0 >= gy + gs.h - 0.02 || gy >= y1 - 0.02) continue

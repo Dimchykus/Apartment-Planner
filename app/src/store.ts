@@ -4,7 +4,7 @@ import { rooms, walls as baseWalls, constrainNode, snapPoint, PX_PER_M, activate
 import { FLATS, BUILTIN_IDS } from './flats'
 import { autoFurnish, inRoom, fitFurn, misplaced, misplacedReason, allowedKinds, type RoomKind } from './autofurnish'
 import { DEFAULT_CRITERIA, type Criteria } from './criteria'
-import { CATALOG, type FType, type Furn } from './catalog'
+import { CATALOG, isWallMounted, type FType, type Furn } from './catalog'
 import type { FloorId } from './materials'
 import { autoElectrics, lightKey, type Light, type Switch, type LightGroup } from './wiring'
 import { OPENING_PRESETS, fitOpening, type PresetId } from './openingTools'
@@ -338,7 +338,12 @@ export const useStore = create<State>((set) => ({
     if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return {}
     return { nodes: { ...s.nodes, [w.a]: [ax + dx, ay + dy], [w.b]: [bx + dx, by + dy] } }
   }),
-  select: (selected) => set((s) => (s.selected === selected ? {} : { selected })),
+  select: (selected) => set((s) => {
+    if (s.selected === selected) return {}
+    const f = selected ? s.furniture.find((q) => q.id === selected) : undefined
+    const resetZ = s.axis === 'z' && f && !isWallMounted(f.type)
+    return resetZ ? { selected, axis: 'free' as const } : { selected }
+  }),
   axis: 'free',
   setAxis: (axis) => set((s) => (s.axis === axis ? {} : { axis })),
   guide: null,
@@ -367,10 +372,12 @@ export const useStore = create<State>((set) => ({
   patchFurn: (id, p) => set((s) => {
     const f = s.furniture.find((q) => q.id === id)
     if (!f) return {}
-    const dr = p.rot !== undefined ? p.rot - f.rot : 0
+    // Floor-standing furniture is locked on the ground (Z/height = 0)
+    const patch = isWallMounted(f.type) ? p : { ...p, y: undefined }
+    const dr = patch.rot !== undefined ? patch.rot - f.rot : 0
     return {
       furniture: s.furniture.map((q) => {
-        if (q.id === id) return { ...q, ...p }
+        if (q.id === id) return { ...q, ...patch }
         if (q.group !== id || !dr) return q
         const ox = q.x - f.x, oz = q.z - f.z // followers turn around the leader
         return { ...q, x: f.x + ox * Math.cos(dr) + oz * Math.sin(dr), z: f.z - ox * Math.sin(dr) + oz * Math.cos(dr), rot: q.rot + dr }
@@ -384,7 +391,8 @@ export const useStore = create<State>((set) => ({
       const cx = ps.reduce((a, p) => a + p[0], 0) / ps.length, cy = ps.reduce((a, p) => a + p[1], 0) / ps.length
       const item = f(id, type, m(cx), m(cy))
       if (type === 'shelf') item.y = 1.5
-      if (type === 'tv') item.y = 0.9
+      if (type === 'tv' || type === 'mirror') item.y = 0.9
+      if (type === 'ac') item.y = 2.25
       if (type === 'gamingDesk') { // the player's chair comes with the setup, in front of the desk, and moves with it
         const chair: Furn = { ...f(id + 'c', 'gamingChair', item.x, item.z + CATALOG.gamingDesk.d / 2 + 0.38, Math.PI), group: id }
         return { furniture: [...s.furniture, item, chair], selected: id }
