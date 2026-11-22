@@ -4,7 +4,7 @@ import { useThree, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import { m, PX_PER_M, editable, snapPoint, rooms, insetRoom, type Pt } from './plan'
 import { useStore, useAllWalls, getAllWalls, CATALOG, type Furn } from './store'
-import { sizeOf, isWallMounted } from './catalog'
+import { sizeOf, isWallMounted, partBoxes } from './catalog'
 import { useUI } from './ui/uiStore'
 import { misplaced, overflowZones, type OverflowZone } from './autofurnish'
 import { Model, FurnOpacity, FurnFinish } from './Models'
@@ -431,8 +431,14 @@ const FurnItem = memo(function FurnItem({ q, on, hov, bad, editable, movable, on
   onHover: (id: string) => void; onUnhover: (id: string) => void
 }) {
   const c = { ...CATALOG[q.type], ...sizeOf(q) }
+  const parts = partBoxes(q)
   const base = CATALOG[q.type], sy = c.h / base.h
   const stretch = q.type === 'wardrobe' || q.type === 'kitchen' ? [1, sy, c.d / base.d] : [c.w / base.w, sy, c.d / base.d]
+  const outline = (pad: number, color: string, opacity?: number) => parts.map((b, i) => (
+    <lineSegments key={i} position={[b.lx, c.h / 2, b.lz]} scale={[b.w + pad, c.h + pad, b.d + pad]} geometry={UNIT_EDGES} raycast={noRaycast}>
+      <lineBasicMaterial color={color} depthTest={false} transparent={opacity !== undefined} opacity={opacity ?? 1} />
+    </lineSegments>
+  ))
   return (
     <group userData={{ furnId: q.id }} position={[q.x, q.y ?? 0, q.z]} rotation={[0, q.rot, 0]}
       onPointerOver={editable ? (e) => { e.stopPropagation(); onHover(q.id) } : undefined}
@@ -472,26 +478,16 @@ const FurnItem = memo(function FurnItem({ q, on, hov, bad, editable, movable, on
           <Model type={q.type} color={q.color ?? c.color} w={q.w} low={q.low} style={q.style} />
         </FurnFinish.Provider>
       </group>
-      {bad && !on && (
-        <lineSegments position={[0, c.h / 2, 0]} scale={[c.w + 0.02, c.h + 0.02, c.d + 0.02]} geometry={UNIT_EDGES} raycast={noRaycast}>
-          <lineBasicMaterial color="#e5222b" depthTest={false} />
-        </lineSegments>
-      )}
+      {bad && !on && outline(0.02, '#e5222b')}
       {hov && (
         <>
-          <lineSegments position={[0, c.h / 2, 0]} scale={[c.w + 0.03, c.h + 0.03, c.d + 0.03]} geometry={UNIT_EDGES} raycast={noRaycast}>
-            <lineBasicMaterial color="#2563eb" depthTest={false} transparent opacity={0.9} />
-          </lineSegments>
+          {outline(0.03, '#2563eb', 0.9)}
           <Html position={[0, c.h + 0.16, 0]} center zIndexRange={[8, 0]} style={{ pointerEvents: 'none' }}>
             <div className="lbl hover">{CATALOG[q.type].label}</div>
           </Html>
         </>
       )}
-      {on && (
-        <lineSegments position={[0, c.h / 2, 0]} scale={[c.w + 0.04, c.h + 0.04, c.d + 0.04]} geometry={UNIT_EDGES} raycast={noRaycast}>
-          <lineBasicMaterial color="#ff8a00" depthTest={false} />
-        </lineSegments>
-      )}
+      {on && outline(0.04, '#ff8a00')}
     </group>
   )
 })

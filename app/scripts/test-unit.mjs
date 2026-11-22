@@ -201,6 +201,22 @@ try {
     assert.equal(doorSwing(w, o, st.getState().nodes, st.getState().doorState), sg0, 'undo should restore door swing')
   })
 
+  test('L-shaped furniture uses exact L-shaped hitbox (inner cutout is free)', () => {
+    reset()
+    const st = useStore
+    // Place an L-shape sofa (2.5 x 1.7, chaise on right) in the open living room
+    const sofa = { id: 'ls1', type: 'lSofa', x: 4.2, z: 5.5, rot: 0, style: 'right' }
+    // Coffee table placed in the inner cutout (left-front quadrant of the L-sofa: x = 4.2 - 0.55, z = 5.5 + 0.45)
+    const tableInCutout = { id: 'ct1', type: 'coffeeTable', x: 4.2 - 0.55, z: 5.5 + 0.45, rot: 0, w: 0.8, d: 0.5 }
+    assert.equal(misplacedReason(tableInCutout, st.getState().nodes, [], [sofa, tableInCutout]), null, 'coffee table in L-sofa cutout should not overlap')
+    assert.equal(overflowZones(tableInCutout, st.getState().nodes, [], [sofa, tableInCutout]).length, 0)
+
+    // Coffee table placed on top of the chaise leg (right-front quadrant: x = 4.2 + 0.78, z = 5.5 + 0.45) MUST collide
+    const tableOnChaise = { id: 'ct2', type: 'coffeeTable', x: 4.2 + 0.78, z: 5.5 + 0.45, rot: 0, w: 0.8, d: 0.5 }
+    assert.equal(misplacedReason(tableOnChaise, st.getState().nodes, [], [sofa, tableOnChaise]), 'overlaps l-shape sofa')
+    assert.ok(overflowZones(tableOnChaise, st.getState().nodes, [], [sofa, tableOnChaise]).some((z) => z.kind === 'item'))
+  })
+
   test('Catalog includes UREVO Foldi 3S and new furniture models', () => {
     assert.equal(CATALOG.treadmill.label, 'UREVO Foldi 3S')
     assert.equal(CATALOG.treadmill.w, 0.65)

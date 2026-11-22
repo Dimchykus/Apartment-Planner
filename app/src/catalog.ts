@@ -54,6 +54,26 @@ export const sizeOf = (q: Furn) => {
   return { w: q.w ?? c.w, d: q.d ?? c.d, h: q.h ?? c.h }
 }
 
+/** Local XZ footprint boxes for collision, overflow, and outlines (2 boxes for L-shaped items, 1 box for rectangular items). */
+export function partBoxes(q: Furn): { lx: number; lz: number; w: number; d: number }[] {
+  const { w, d } = sizeOf(q)
+  if (q.type === 'lSofa') {
+    const sgn = q.style === 'left' ? -1 : 1
+    return [
+      { lx: 0, lz: (-0.38 / 1.7) * d, w, d: (0.94 / 1.7) * d },
+      { lx: sgn * (0.78 / 2.5) * w, lz: (0.45 / 1.7) * d, w: (0.94 / 2.5) * w, d: (0.8 / 1.7) * d },
+    ]
+  }
+  if (q.type === 'cornerDesk') {
+    const sgn = q.style === 'left' ? -1 : 1
+    return [
+      { lx: 0, lz: (-0.375 / 1.4) * d, w, d: (0.65 / 1.4) * d },
+      { lx: sgn * (0.5 / 1.6) * w, lz: (0.325 / 1.4) * d, w: (0.6 / 1.6) * w, d: (0.75 / 1.4) * d },
+    ]
+  }
+  return [{ lx: 0, lz: 0, w, d }]
+}
+
 export type Preset = { label: string; w: number; d: number; h?: number }
 const P = (label: string, w: number, d: number, h?: number): Preset => ({ label, w, d, h })
 /** Named size variants per item type (metres). */
