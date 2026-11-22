@@ -517,6 +517,24 @@ function Ac({ color }: P) {
   </>)
 }
 
+/** Wall-mounted electric towel warmer (50 × 10 × 90 cm). Back wall mount is at -z, rails at +z. */
+function TowelWarmer({ color, style }: P & { style?: string }) {
+  const bars = style === 'minimal' ? [0.22, 0.44, 0.66, 0.84] : [0.14, 0.24, 0.34, 0.44, 0.56, 0.66, 0.76, 0.86]
+  return (<>
+    {/* vertical side collectors */}
+    {[-0.22, 0.22].map((x) => <B key={x} p={[x, 0.48, 0.025]} s={[0.032, 0.84, 0.032]} c={color} r={0.012} metal={0.65} rough={0.3} />)}
+    {/* horizontal heated rungs */}
+    {bars.map((y) => <B key={y} p={[0, y, 0.025]} s={[0.44, 0.022, 0.024]} c={color} r={0.009} metal={0.65} rough={0.3} />)}
+    {/* 4 wall standoffs */}
+    {[[-0.22, 0.14], [0.22, 0.14], [-0.22, 0.82], [0.22, 0.82]].map(([x, y], i) => (
+      <B key={i} p={[x, y, -0.015]} s={[0.024, 0.024, 0.06]} c={color} r={0.006} metal={0.6} rough={0.35} />
+    ))}
+    {/* bottom electric thermostat & power indicator */}
+    <B p={[0.22, 0.035, 0.025]} s={[0.044, 0.07, 0.044]} c="#1a1c20" r={0.008} rough={0.4} />
+    <Glow p={[0.22, 0.04, 0.049]} s={[0.01, 0.01, 0.004]} c="#ef4444" i={1.4} />
+  </>)
+}
+
 /** Framed picture, hung on a wall (bottom edge at the item's lift height). Front is +z. */
 function Painting({ color }: P) {
   return (<>
@@ -570,6 +588,7 @@ export function Model({ type, color, w, low, style }: { type: FType; color: stri
     case 'tv': return <Tv color={color} />
     case 'mirror': return <Mirror color={color} style={style} />
     case 'ac': return <Ac color={color} />
+    case 'towelWarmer': return <TowelWarmer color={color} style={style} />
     case 'bookcase': return <Bookcase color={color} style={style} />
     case 'dresser': return <Dresser color={color} />
     case 'shoeCabinet': return <ShoeCabinet color={color} />

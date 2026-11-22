@@ -202,7 +202,7 @@ export function FurnPanel({ sel }: { sel: Furn }) {
       <Slider label="Width" v={cmv(size.w)} min={wMin} max={wMax} on={(x) => patch({ w: x })} />
       <Slider label="Depth" v={cmv(size.d)} min={dMin} max={dMax} on={(x) => patch({ d: x })} />
       {!isWallMounted(sel.type) && sel.type !== 'rug' && <Slider label="Height" v={cmv(size.h)} min={hMin} max={hMax} on={(x) => patch({ h: x })} />}
-      {isWallMounted(sel.type) && <Slider label="Mounted at" v={cmv(sel.y ?? (sel.type === 'ac' ? 2.25 : sel.type === 'shelf' ? 1.5 : 0.9))} min={20} max={240} on={(x) => patch({ y: x })} />}
+      {isWallMounted(sel.type) && <Slider label="Mounted at" v={cmv(sel.y ?? (sel.type === 'ac' ? 2.25 : sel.type === 'shelf' ? 1.5 : sel.type === 'towelWarmer' ? 1.0 : 0.9))} min={20} max={240} on={(x) => patch({ y: x })} />}
       <div>
         {SWATCHES.map((c) => <span key={c} className="sw" style={{ background: c }} onClick={() => patch({ color: c })} />)}
         <input type="color" value={sel.color ?? cat.color} onChange={(e) => patch({ color: e.target.value })} title="Any colour" />

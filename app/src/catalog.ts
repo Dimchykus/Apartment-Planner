@@ -1,6 +1,6 @@
 export type FType =
   | 'sofa' | 'lSofa' | 'armchair' | 'ottoman' | 'coffeeTable' | 'diningTable' | 'chair' | 'officeChair' | 'gamingChair'
-  | 'bed' | 'nightstand' | 'shower' | 'shelf' | 'tv' | 'mirror' | 'ac' | 'painting' | 'flowers'
+  | 'bed' | 'nightstand' | 'shower' | 'shelf' | 'tv' | 'mirror' | 'ac' | 'towelWarmer' | 'painting' | 'flowers'
   | 'bookcase' | 'dresser' | 'shoeCabinet' | 'wardrobe' | 'tvUnit' | 'kitchen' | 'kitchenIsland' | 'fridge'
   | 'bathtub' | 'wc' | 'vanity' | 'washer' | 'desk' | 'cornerDesk' | 'gamingDesk' | 'treadmill' | 'floorLamp' | 'plant' | 'rug'
 
@@ -25,6 +25,7 @@ export const CATALOG: Record<FType, { label: string; w: number; d: number; h: nu
   tv: { label: 'Wall TV', w: 1.2, d: 0.06, h: 0.7, color: '#101012', wallMounted: true },
   mirror: { label: 'Wall mirror', w: 0.7, d: 0.05, h: 1.4, color: '#d8e4ea', wallMounted: true },
   ac: { label: 'Air conditioner', w: 0.9, d: 0.22, h: 0.3, color: '#f2f3f5', wallMounted: true },
+  towelWarmer: { label: 'Electric towel warmer', w: 0.5, d: 0.1, h: 0.9, color: '#2b2d32', wallMounted: true },
   bookcase: { label: 'Bookcase / tall cabinet', w: 0.8, d: 0.3, h: 2.0, color: '#c9b79c' },
   dresser: { label: 'Chest of drawers', w: 1.0, d: 0.45, h: 0.85, color: '#d8d2c6' },
   shoeCabinet: { label: 'Shoe cabinet', w: 0.9, d: 0.3, h: 1.2, color: '#e6e2da' },
@@ -107,6 +108,7 @@ export const PRESETS: Partial<Record<FType, Preset[]>> = {
   tv: [P('32″', 0.75, 0.06, 0.45), P('43″', 0.95, 0.06, 0.56), P('55″', 1.25, 0.06, 0.72), P('65″', 1.45, 0.06, 0.84)],
   mirror: [P('Bathroom 60×90', 0.6, 0.05, 0.9), P('Full length 70×140', 0.7, 0.05, 1.4), P('Wide 100×80', 1.0, 0.05, 0.8)],
   ac: [P('Standard 90 cm', 0.9, 0.22, 0.3), P('Wide 110 cm', 1.1, 0.24, 0.32)],
+  towelWarmer: [P('Compact 40×70', 0.4, 0.1, 0.7), P('Standard 50×90', 0.5, 0.1, 0.9), P('Tall 50×120', 0.5, 0.1, 1.2)],
   bookcase: [P('40 cm', 0.4, 0.3), P('60 cm', 0.6, 0.3), P('80 cm', 0.8, 0.3), P('120 cm', 1.2, 0.35)],
   dresser: [P('80 cm', 0.8, 0.4), P('100 cm', 1.0, 0.45), P('120 cm', 1.2, 0.45)],
   shoeCabinet: [P('70 cm', 0.7, 0.3), P('90 cm', 0.9, 0.3), P('120 cm', 1.2, 0.35)],
@@ -131,6 +133,7 @@ export const STYLES: Partial<Record<FType, { id: string; label: string }[]>> = {
   treadmill: [{ id: 'unfolded', label: 'Unfolded (handrail up)' }, { id: 'folded', label: 'Folded flat' }],
   floorLamp: [{ id: 'classic', label: 'Standing shade' }, { id: 'arc', label: 'Arc lamp' }],
   mirror: [{ id: 'rect', label: 'Rectangular' }, { id: 'round', label: 'Round' }],
+  towelWarmer: [{ id: 'ladder', label: 'Ladder (8 bars)' }, { id: 'minimal', label: 'Minimal (4 bars)' }],
   rug: [{ id: 'rect', label: 'Rectangular' }, { id: 'round', label: 'Round' }],
 }
 

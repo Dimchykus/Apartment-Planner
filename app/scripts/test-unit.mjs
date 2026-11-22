@@ -132,7 +132,7 @@ try {
     for (const t of ['sofa', 'lSofa', 'desk', 'treadmill', 'gamingChair', 'officeChair', 'cornerDesk', 'plant', 'rug']) {
       assert.equal(isWallMounted(t), false, `${t} should be floor-standing`)
     }
-    for (const t of ['shelf', 'tv', 'mirror', 'ac']) {
+    for (const t of ['shelf', 'tv', 'mirror', 'ac', 'towelWarmer']) {
       assert.equal(isWallMounted(t), true, `${t} should be wall-mounted`)
     }
     st.getState().addFurn('lSofa')
