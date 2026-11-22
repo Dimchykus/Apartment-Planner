@@ -11,28 +11,92 @@ import { Model, FurnOpacity, FurnFinish } from './Models'
 
 const snap = (v: number, g = 0.05) => Math.round(v / g) * g
 
-/** Invisible floor that receives pointer moves while something is being dragged. */
+/** Snap an item's edges / centre to the edges / centres of the other items (within 6 cm) and report the guide lines. */
+function alignSnap(id: string, x: number, z: number): { x: number; z: number; guide: { x?: number; z?: number } } {
+  const st = useStore.getState(), me = st.furniture.find((q) => q.id === id)
+  if (!me) return { x, z, guide: {} }
+  const ext = (f: typeof me) => { const s = sizeOf(f), c = Math.abs(Math.cos(f.rot)), si = Math.abs(Math.sin(f.rot)); return { hx: (s.w * c + s.d * si) / 2, hz: (s.w * si + s.d * c) / 2 } }
+  const a = ext(me); let bx = 0.06, bz = 0.06, gx: number | undefined, gz: number | undefined, nx = x, nz = z
+  for (const o of st.furniture) {
+    if (o.id === id || o.group === id) continue
+    const b = ext(o)
+    for (const p of [x - a.hx, x, x + a.hx]) for (const q of [o.x - b.hx, o.x, o.x + b.hx]) if (Math.abs(p - q) < bx) { bx = Math.abs(p - q); nx = x + (q - p); gx = q }
+    for (const p of [z - a.hz, z, z + a.hz]) for (const q of [o.z - b.hz, o.z, o.z + b.hz]) if (Math.abs(p - q) < bz) { bz = Math.abs(p - q); nz = z + (q - p); gz = q }
+  }
+  return { x: nx, z: nz, guide: { x: gx, z: gz } }
+}
+
+/** Drop a carried item (click / Enter) or put it back (Esc). */
+export function endCarry(cancel: boolean) {
+  const st = useStore.getState(), d = st.drag
+  if (d?.carry && d.kind === 'furn') { if (cancel) { st.moveFurn(d.id, d.sx ?? 0, d.sz ?? 0); st.patchFurn(d.id, { y: d.sy || undefined }) } st.setDrag(null); st.setGuide(null) }
+}
+export function startCarry(id: string) {
+  const st = useStore.getState(), f = st.furniture.find((q) => q.id === id)
+  if (f) st.setDrag({ kind: 'furn', id, dx: 0, dz: 0, carry: true, sx: f.x, sz: f.z, sy: f.y ?? 0, cy: 0 })
+}
+
+/** Invisible plane that receives pointer moves while something is dragged: the floor, or (wall view) a vertical plane along the wall. */
 export function DragPlane() {
   const drag = useStore((s) => s.drag)
-  const { setDrag, moveNode, moveFurn } = useStore.getState()
+  const axis = useStore((s) => s.axis)
+  const wv = useUI((s) => s.wallView)
   useEffect(() => {
-    const up = () => useStore.getState().setDrag(null)
+    const up = () => { if (!useStore.getState().drag?.carry) { useStore.getState().setDrag(null); useStore.getState().setGuide(null) } }
     addEventListener('pointerup', up)
     return () => removeEventListener('pointerup', up)
   }, [])
   if (!drag) return null
+  const st = useStore.getState()
   const onMove = (e: ThreeEvent<PointerEvent>) => {
-    const x = snap(e.point.x + drag.dx), z = snap(e.point.z + drag.dz)
-    if (drag.kind === 'node') moveNode(drag.id, x, z)
-    else if (drag.kind === 'wall') useStore.getState().moveWall(drag.id, x, z)
-    else moveFurn(drag.id, x, z)
+    if (drag.kind !== 'furn') {
+      const x = snap(e.point.x + drag.dx), z = snap(e.point.z + drag.dz)
+      if (drag.kind === 'node') st.moveNode(drag.id, x, z); else st.moveWall(drag.id, x, z)
+      return
+    }
+    if (wv) { // elevation view: slide along the wall and change the hanging height
+      const L = Math.hypot(wv.b[0] - wv.a[0], wv.b[1] - wv.a[1]), ux = (wv.b[0] - wv.a[0]) / L, uz = (wv.b[1] - wv.a[1]) / L
+      const f = st.furniture.find((q) => q.id === drag.id)!
+      const off = (drag.sx! - wv.a[0]) * wv.n[0] + (drag.sz! - wv.a[1]) * wv.n[1]
+      const t = (e.point.x - wv.a[0]) * ux + (e.point.z - wv.a[1]) * uz + drag.dx
+      if (axis !== 'z') st.moveFurn(drag.id, snap(wv.a[0] + ux * t + wv.n[0] * off), snap(wv.a[1] + uz * t + wv.n[1] * off))
+      if (axis !== 'x' && (f.y !== undefined || CATALOG[f.type].h < 0.5 || f.type === 'shelf' || f.type === 'tv')) st.patchFurn(drag.id, { y: Math.max(0, Math.min(2.4, snap(e.point.y + drag.dz))) })
+      return
+    }
+    if (axis === 'z') { // height only: mouse up / down
+      st.patchFurn(drag.id, { y: Math.max(0, Math.min(2.4, snap((drag.sy ?? 0) + ((drag.cy ?? 0) - e.nativeEvent.clientY) * 0.006))) })
+      return
+    }
+    let x = snap(e.point.x + drag.dx), z = snap(e.point.z + drag.dz)
+    if (axis === 'x') z = drag.sz!; else if (axis === 'y') x = drag.sx!
+    const a = alignSnap(drag.id, x, z)
+    if (axis !== 'y') x = a.x
+    if (axis !== 'x') z = a.z
+    st.setGuide({ x: axis === 'y' ? undefined : a.guide.x, z: axis === 'x' ? undefined : a.guide.z })
+    st.moveFurn(drag.id, x, z)
   }
-  void setDrag
+  const L = wv ? Math.hypot(wv.b[0] - wv.a[0], wv.b[1] - wv.a[1]) : 0
   return (
-    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.002, 0]} onPointerMove={onMove}>
-      <planeGeometry args={[80, 80]} />
+    <mesh
+      rotation={wv ? [0, Math.atan2(wv.n[0], wv.n[1]), 0] : [-Math.PI / 2, 0, 0]}
+      position={wv ? [(wv.a[0] + wv.b[0]) / 2, 1.3, (wv.a[1] + wv.b[1]) / 2] : [0, 0.002, 0]}
+      onPointerMove={onMove} onPointerDown={drag.carry ? () => endCarry(false) : undefined}>
+      <planeGeometry args={wv ? [Math.max(L, 4) * 3, 8] : [80, 80]} />
       <meshBasicMaterial transparent opacity={0} depthWrite={false} />
     </mesh>
+  )
+}
+
+/** Alignment guide lines shown while moving furniture. */
+export function Guides() {
+  const g = useStore((s) => s.guide)
+  const drag = useStore((s) => s.drag)
+  if (!g || !drag) return null
+  return (
+    <group>
+      {g.x !== undefined && <mesh position={[g.x, 0.03, 6]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[0.015, 40]} /><meshBasicMaterial color="#ff2d95" depthTest={false} transparent opacity={0.9} /></mesh>}
+      {g.z !== undefined && <mesh position={[6, 0.03, g.z]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[40, 0.015]} /><meshBasicMaterial color="#ff2d95" depthTest={false} transparent opacity={0.9} /></mesh>}
+    </group>
   )
 }
 
@@ -165,7 +229,12 @@ export function Furniture({ editable, movable = false, opacity = 1 }: { editable
             onPointerDown={editable ? (e) => {
               e.stopPropagation()
               useStore.getState().select(q.id)
-              if (movable) useStore.getState().setDrag({ kind: 'furn', id: q.id, dx: q.x - e.point.x, dz: q.z - e.point.z }) // dragging only in "Move items" mode
+              if (movable) {
+                const wv = useUI.getState().wallView
+                const L = wv ? Math.hypot(wv.b[0] - wv.a[0], wv.b[1] - wv.a[1]) : 1
+                const t0 = wv ? ((q.x - wv.a[0]) * (wv.b[0] - wv.a[0]) + (q.z - wv.a[1]) * (wv.b[1] - wv.a[1])) / L - ((e.point.x - wv.a[0]) * (wv.b[0] - wv.a[0]) + (e.point.z - wv.a[1]) * (wv.b[1] - wv.a[1])) / L : 0
+                useStore.getState().setDrag({ kind: 'furn', id: q.id, dx: wv ? t0 : q.x - e.point.x, dz: wv ? (q.y ?? 0) - e.point.y : q.z - e.point.z, sx: q.x, sz: q.z, sy: q.y ?? 0, cy: e.nativeEvent.clientY }) // dragging only in "Move items" mode
+              }
             } : undefined}>
             <group scale={stretch as [number, number, number]}>
               <FurnFinish.Provider value={q.finish}>
@@ -208,6 +277,13 @@ export function Keys() {
         else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selected?.[0] === 'c') s.removeWall(s.selected.slice(0, -1))
         return
       }
+      if (s.drag?.carry) { if (e.key === 'Enter') { endCarry(false); return } if (e.key === 'Escape') { endCarry(true); return } }
+      if (s.mode === 'move' && !typing && !e.ctrlKey && !e.metaKey) {
+        const ax = ({ KeyX: 'x', KeyY: 'y', KeyZ: 'z' } as Record<string, 'x' | 'y' | 'z'>)[e.code]
+        if (ax) { s.setAxis(s.axis === ax ? 'free' : ax); return }
+        if (e.key === 'Enter' && s.selected && !s.drag) { startCarry(s.selected); return }
+      }
+      if ((e.ctrlKey || e.metaKey) && e.code === 'KeyD' && s.selected) { e.preventDefault(); s.duplicateFurn(s.selected); return }
       if ((s.mode !== 'furniture' && s.mode !== 'move') || !s.selected || typing) return
       const f = s.furniture.find((q) => q.id === s.selected)
       if (!f) return

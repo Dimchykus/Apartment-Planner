@@ -89,3 +89,7 @@ App lives in `app/`. Run: `cd app && npm run dev` → http://localhost:5173
 
 ## Phase 10 — Menu split (done)
 - [x] Left panel = general (flat, overview, scene & view, my flats, share), always the same in every mode; right panel = tools of the current edit mode (Walls, Furniture incl. AI furnish, Move, Rooms, Style, Doors, Sizes), hide / show with a button; on phones the sheet has a General | Tools tab that switches by itself when a mode is chosen; the 3D view stays centred between the open panels
+
+## Phase 11 — Move tools and shorter tool panels (done)
+- [x] Move mode: axis lock Free / X / Y / Z (height) with buttons or keys X, Y, Z; pick up with Enter, click or Enter drops, Esc puts it back; pink alignment guides to other items' edges / centres (6 cm); Align: 3D | 2D plan | Wall (elevation view of any wall, slide along the wall and set hanging height); Duplicate (Ctrl+D)
+- [x] Right-panel texts cut to one short line per mode

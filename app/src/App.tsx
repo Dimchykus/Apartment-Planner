@@ -5,7 +5,7 @@ import { EffectComposer, N8AO, Bloom, ToneMapping, SMAA } from '@react-three/pos
 import * as THREE from 'three'
 import { Flat, PlanOverlay } from './Flat'
 import { Walker, Flyer } from './Walk'
-import { DragPlane, WallHandles, Furniture, Keys } from './Editor'
+import { DragPlane, Guides, WallHandles, Furniture, Keys } from './Editor'
 import { Dimensions } from './Dims'
 import { Outside, SunLight, ENV_SETTINGS } from './Outside'
 import { RoomsLayer } from './Rooms'
@@ -63,6 +63,14 @@ function DebugHook() {
   return null
 }
 
+/** Elevation view: orthographic camera facing one wall straight on (for aligning things on that wall). */
+function WallView({ w }: { w: NonNullable<ReturnType<typeof useUI.getState>['wallView']> }) {
+  const size = useThree((s) => s.size)
+  const L = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]), mx = (w.a[0] + w.b[0]) / 2, mz = (w.a[1] + w.b[1]) / 2
+  const zoom = Math.min(size.width / (L * 1.25 + 0.5), size.height / 3.6)
+  return <OrthographicCamera makeDefault position={[mx + w.n[0] * 30, 1.35, mz + w.n[1] * 30]} zoom={zoom} near={0.1} far={80} onUpdate={(c) => c.lookAt(mx, 1.35, mz)} />
+}
+
 /** Without post-processing (fast mode) the renderer does the tone mapping itself. */
 function Tone({ low }: { low: boolean }) {
   const { gl, scene } = useThree()
@@ -82,7 +90,8 @@ export default function App() {
   const tracerOpen = !!u.tracer
   const fly = s.mode === 'fly'
   const walk = s.mode === 'walk'
-  const view2d = u.on2d && !walk && !fly // flat top-down 2D view
+  const wallView = !walk && !fly ? u.wallView : null
+  const view2d = u.on2d && !walk && !fly && !wallView // flat top-down 2D view
   const op = u.overlay ? u.flatOpacity : 1
   const env = u.env
   const q = u.quality
@@ -136,16 +145,18 @@ export default function App() {
           {s.mode === 'dims' && <Dimensions />}
           {s.mode === 'rooms' && <RoomsLayer />}
           <DragPlane />
+          <Guides />
         </Suspense>
         {walk
           ? <Walker />
           : fly
           ? <Flyer />
-          : <OrbitControls key={s.flatId + view2d} makeDefault enabled={!s.drag && !tracerOpen} target={[cx, 0, cz]} maxPolarAngle={Math.PI / 2.02}
-              enableRotate={!view2d} screenSpacePanning
+          : <OrbitControls key={s.flatId + view2d + (wallView?.label ?? '')} makeDefault enabled={!s.drag && !tracerOpen} target={wallView ? [(wallView.a[0] + wallView.b[0]) / 2, 1.35, (wallView.a[1] + wallView.b[1]) / 2] : [cx, 0, cz]} maxPolarAngle={Math.PI / 2.02}
+              enableRotate={!view2d && !wallView} screenSpacePanning
               mouseButtons={view2d ? { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN } : undefined}
               touches={view2d ? { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN } : undefined} />}
         {view2d && <View2D key={s.flatId} cx={cx} cz={cz} w={fw} h={fh} />}
+        {wallView && <WallView key={wallView.label} w={wallView} />}
         <Keys />
         <CameraRig cx={cx} cz={cz} k={s.flatId} off={view2d} still={walk || fly} />
         <ViewShift />

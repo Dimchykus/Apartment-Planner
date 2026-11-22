@@ -192,3 +192,6 @@ a.btn { text-decoration: none; margin-top: 7px; }
 .fab-tools { position: absolute; top: 64px; right: 12px; z-index: 15; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); border-radius: 12px; padding: 8px 12px; box-shadow: var(--shadow); font-weight: 700; }
 .seg.tabs { margin: 0 12px 8px; flex: none; } .seg.tabs button { flex: 1; }
 @media (max-width: 760px) { .side.tools { display: none; } .fab-tools { display: none; } }
+
+.seg.four button { padding: 4px 6px; font-size: 12.5px; }
+.hint { font-size: 12px; }

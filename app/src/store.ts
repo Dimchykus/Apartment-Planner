@@ -74,7 +74,12 @@ type State = {
   cursor: Pt | null
   newThick: number // cm
   newDoor: boolean
-  drag: { kind: 'node' | 'furn' | 'wall'; id: string; dx: number; dz: number } | null
+  drag: { kind: 'node' | 'furn' | 'wall'; id: string; dx: number; dz: number; carry?: boolean; sx?: number; sz?: number; sy?: number; cy?: number } | null
+  axis: 'free' | 'x' | 'y' | 'z'        // move lock: x = left-right, y = forward-back (plan), z = height
+  setAxis: (a: 'free' | 'x' | 'y' | 'z') => void
+  guide: { x?: number; z?: number } | null
+  setGuide: (g: { x?: number; z?: number } | null) => void
+  duplicateFurn: (id: string) => void
   setMode: (m: Mode) => void
   select: (id: string | null) => void
   setDrag: (d: State['drag']) => void
@@ -300,6 +305,11 @@ export const useStore = create<State>((set) => ({
     return { nodes: { ...s.nodes, [w.a]: [ax + dx, ay + dy], [w.b]: [bx + dx, by + dy] } }
   }),
   select: (selected) => set({ selected }),
+  axis: 'free',
+  setAxis: (axis) => set({ axis }),
+  guide: null,
+  setGuide: (guide) => set({ guide }),
+  duplicateFurn: (id) => set((s) => { const f = s.furniture.find((q) => q.id === id); if (!f) return {}; const c = { ...f, id: 'f' + Math.random().toString(36).slice(2, 7), x: f.x + 0.35, z: f.z + 0.35, group: undefined }; return { furniture: [...s.furniture, c], selected: c.id } }),
   setDrag: (drag) => set({ drag }),
   moveNode: (id, x, z) => set((s) => {
     if (id[0] === 'c') {

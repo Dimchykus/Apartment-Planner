@@ -16,7 +16,7 @@ export function RoomsPanel() {
   const kind = room ? (s.roomKinds[room.id] ?? defaultKind(room)) : null
   return (
     <>
-      <small>Click a room on the floor (or pick it here), then choose what it is. The room is furnished again straight away.</small>
+      <small>Click a room (or pick it here) and choose what it is.</small>
       <div className="chips">
         {planRooms.map((r) => (
           <button key={r.id} className={s.selRoom === r.id ? 'on' : ''} onClick={() => s.selectRoom(r.id)}>
@@ -46,7 +46,7 @@ export function RoomsPanel() {
       {s.notice && <div className="warn" style={{ background: '#e8f1ff', borderColor: '#7aa7e8', color: '#123' }}>ℹ {s.notice} <button onClick={() => s.setNotice(null)}>OK</button></div>}
       <CriteriaPanel />
       <SpaceSummary />
-      <small>Pin a zone: choose an item, then move the mouse over the floor. The circle shows the result: <b style={{color:'#1f9d55'}}>green</b> fits as is, <b style={{color:'#e08a00'}}>orange</b> it is placed anyway (it shrinks, ignores a window / door swing, and neighbours move out of the way), <b style={{color:'#d92d2d'}}>red</b> impossible (wall, wet room). Click to place; the flat is furnished again right away.</small>
+      <small>Pin: choose an item, then click the floor. <b style={{color:'#1f9d55'}}>Green</b> fits, <b style={{color:'#e08a00'}}>orange</b> adapts, <b style={{color:'#d92d2d'}}>red</b> impossible.</small>
       <div className="chips">
         {ZONE_ITEMS.map((z) => (
           <button key={z.type} className={s.placing === z.type ? 'on' : ''} onClick={() => s.startPlacing(s.placing === z.type ? null : z.type)}>
@@ -189,6 +189,7 @@ export function FurnPanel({ sel }: { sel: Furn }) {
       <div>
         <button onClick={() => patch({ rot: sel.rot + Math.PI / 2 })}>Rotate</button>
         <button onClick={() => patch({ w: undefined, d: undefined, h: undefined, style: undefined, finish: undefined, color: undefined })}>Reset</button>
+        <button onClick={() => s.duplicateFurn(sel.id)} title="Ctrl+D">Duplicate</button>
         <button onClick={() => s.removeFurn(sel.id)}>Remove</button>
       </div>
     </div>

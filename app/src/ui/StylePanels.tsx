@@ -40,7 +40,7 @@ export function DoorLightControls() {
       <button className={lightMode === 'on' ? 'on' : ''} onClick={() => s.setLightsAll(true)}>All on</button>
       <button className={lightMode === 'off' ? 'on' : ''} onClick={() => s.setLightsAll(false)}>All off</button>
     </div>
-    <small className="muted">Click a wall switch (or press <kbd>E</kbd> next to it while walking) to switch a room's lights. Click a door to change its position.</small>
+    <small className="muted">Click a switch or door in the 3D view (<kbd>E</kbd> when walking).</small>
   </>)
 }
 
@@ -54,7 +54,7 @@ export function StylePanel() {
   const curWall = st.wall ?? DEFAULT_WALL
   const apply = (p: { wall?: string; floor?: FloorId }) => (target === '*' ? s.styleAll(p) : s.setRoomStyle(target, p))
   return (<>
-    <p className="hint">Choose a room, then pick wall colour and floor. Walls can have a different colour on each side.</p>
+    <p className="hint">Pick a room, then a colour and a floor.</p>
     <div className="chips">
       {planRooms.filter((r) => !r.skip).map((r) => (
         <button key={r.id} className={target === r.id ? 'on' : ''} onClick={() => setTarget(r.id)}>
@@ -103,7 +103,7 @@ export function OpeningsPanel() {
   const dState = (door?.state ?? (w && w.thick / PX_PER_M >= 0.21 ? 0 : 1)) as 0 | 1 | 2
   void u
   return (<>
-    <p className="hint">Add, move, resize or remove windows and doors. Click one in the 3D view to edit it, or choose <b>Add</b> and click a wall.</p>
+    <p className="hint">Click a window or door to edit it, or choose Add and click a wall.</p>
     <div className="seg">
       <button className={s.openingTool === 'select' ? 'on' : ''} onClick={() => s.setOpeningTool('select')}><Icon n="cursor" size={14} /> Select</button>
       <button className={s.openingTool === 'add' ? 'on' : ''} onClick={() => s.setOpeningTool('add')}><Icon n="plus" size={14} /> Add</button>
@@ -112,7 +112,7 @@ export function OpeningsPanel() {
       <div className="chips">
         {OPENING_PRESETS.map((p) => <button key={p.id} className={s.openingPreset === p.id ? 'on' : ''} onClick={() => s.setOpeningPreset(p.id)}>{p.label}</button>)}
       </div>
-      <p className="hint">Click on a wall. Windows keep clear of each other and of the wall ends.</p>
+      <p className="hint">Click a wall to place it.</p>
     </>)}
     {o && w && (
       <div className="sel">

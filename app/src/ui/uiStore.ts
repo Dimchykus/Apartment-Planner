@@ -26,6 +26,8 @@ type UI = {
   on2d: boolean
   overlay: boolean
   ceiling2d: boolean
+  wallView: { a: [number, number]; b: [number, number]; n: [number, number]; label: string } | null // elevation view of one wall (metres)
+  setWallView: (w: UI['wallView']) => void
   rulesOnCriteria: boolean
   setRulesOnCriteria: (v: boolean) => void
   setCeiling2d: (v: boolean) => void
@@ -65,6 +67,8 @@ export const useUI = create<UI>((set, get) => ({
   on2d: false,
   overlay: false,
   ceiling2d: false,
+  wallView: null,
+  setWallView: (wallView) => set({ wallView }),
   rulesOnCriteria: saved.rulesOnCriteria ?? false,
   setRulesOnCriteria: (rulesOnCriteria) => set({ rulesOnCriteria }),
   setCeiling2d: (ceiling2d) => set({ ceiling2d }),

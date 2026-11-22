@@ -11,6 +11,8 @@ import { CriteriaPanel, SpaceSummary, RoomsPanel, FurnPanel } from './Panels'
 import { StylePanel, OpeningsPanel, DoorLightControls } from './StylePanels'
 import { AiPanel } from './AiPanel'
 import { useAI } from '../ai/aiStore'
+import { startCarry } from '../Editor'
+import { describeRooms } from '../autofurnish'
 import { duplicateFlat, deleteUserFlat, exportFlat, importFlatFile, exportProject, importProject, renameUserFlat, isUserFlat } from '../lib/libraryActions'
 
 /** Collapsible section of the side menu. */
@@ -32,6 +34,29 @@ const MODE_TITLES: Record<string, [string, string]> = {
   move: ['Move items', 'move'], rooms: ['Rooms & zones', 'rooms'], dims: ['Dimensions', 'ruler'], style: ['Walls & floors', 'palette'], openings: ['Doors & windows', 'door'],
 }
 
+/** Top-down plan view, or an elevation view of one wall: handy for lining things up. */
+function ViewTools() {
+  const s = useStore()
+  const u = useUI()
+  const edges = describeRooms(s.nodes, s.customWalls, s.roomKinds).flatMap((r) => r.edges.filter((e) => e.len >= 0.8).map((e) => ({ r, e })))
+  const cur = u.wallView ? edges.findIndex(({ e }) => u.wallView!.label === e.i + '|' + e.from.join()) : -1
+  return (
+    <div className="sel">
+      <b>Align</b>
+      <div className="seg">
+        <button className={!u.on2d && !u.wallView ? 'on' : ''} onClick={() => { u.setWallView(null); u.setOn2d(false) }}>3D</button>
+        <button className={u.on2d && !u.wallView ? 'on' : ''} onClick={() => { u.setWallView(null); u.setOn2d(true) }}>2D plan</button>
+        <button className={u.wallView ? 'on' : ''} onClick={() => { const f = edges[0]; if (f) u.setWallView({ a: f.e.from, b: f.e.to, n: f.e.normal, label: f.e.i + '|' + f.e.from.join() }) }}>Wall</button>
+      </div>
+      {u.wallView && (
+        <select value={cur} onChange={(e) => { const f = edges[+e.target.value]; if (f) u.setWallView({ a: f.e.from, b: f.e.to, n: f.e.normal, label: f.e.i + '|' + f.e.from.join() }) }}>
+          {edges.map(({ r, e }, k) => <option key={k} value={k}>{r.name.replace(/ \(.*\)/, '')} · wall {e.i + 1} · {e.len} m</option>)}
+        </select>
+      )}
+    </div>
+  )
+}
+
 function ModePanel() {
   const s = useStore()
   const on2d = useUI((u) => u.on2d)
@@ -39,25 +64,33 @@ function ModePanel() {
   const selWall = s.selected?.[0] === 'c' ? s.customWalls.find((w) => w.id === s.selected!.slice(0, -1)) : undefined
   const mode = s.mode
   const touch = isTouch
-  if (mode === 'view') return <p className="hint">{on2d ? 'Flat top-down plan view. ' : ''}{touch ? 'One finger rotates, two fingers zoom and move.' : 'Drag to rotate · right-drag to move · wheel to zoom.'} Pick a tool below to change something.</p>
-  if (mode === 'walk') return <p className="hint">{touch ? 'Use the stick (bottom left) to walk, drag the scene to look.' : 'Click the scene to look around · W A S D to move · Shift to run · E opens doors and uses switches · Esc releases the mouse.'} Walls stop you; doors let you through.</p>
-  if (mode === 'fly') return <p className="hint">{touch ? 'Stick = fly where you look, ▲▼ = up / down, drag the scene to look.' : 'Click the scene to look · W A S D fly where you look · Space up · C down · Shift fast · wheel = speed · Esc releases the mouse.'} No collisions.</p>
-  if (mode === 'dims') return <p className="hint">Blue lines = clear wall-to-wall length (cm) · grey tags = wall thickness · brown / teal = doors and windows (width × height) · dark tags = room areas · white tags = furniture W×D×H.</p>
+  const tip = (t: React.ReactNode) => <p className="hint">{t}</p>
+  if (mode === 'view') return tip(<>{on2d ? 'Top-down plan. ' : ''}{touch ? 'One finger turns, two zoom.' : 'Drag = turn · right-drag = move · wheel = zoom.'}</>)
+  if (mode === 'walk') return tip(touch ? 'Stick = walk, drag = look.' : <>Click to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run · <kbd>E</kbd> use · <kbd>Esc</kbd> release.</>)
+  if (mode === 'fly') return tip(touch ? 'Stick = fly, ▲▼ = up / down.' : <>Click to look · <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> fly · <kbd>Space</kbd>/<kbd>C</kbd> up / down · wheel = speed.</>)
+  if (mode === 'dims') return tip('Lengths in cm. Blue = clear wall length, grey = thickness, brown / teal = doors / windows.')
   if (mode === 'rooms') return <RoomsPanel />
   if (mode === 'style') return <StylePanel />
-  if (mode === 'openings') return <OpeningsPanel />
+  if (mode === 'openings') return (<><OpeningsPanel /><ViewTools /></>)
   if (mode === 'move') return (<>
-    <p className="hint">Drag furniture to move it · <kbd>R</kbd> rotate 90° · <kbd>Q</kbd>/<kbd>E</kbd> ±15° · <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo.</p>
+    <div className="sel">
+      <b>Move</b>
+      <div className="seg four">
+        {([['free', 'Free'], ['x', 'X'], ['y', 'Y'], ['z', 'Z height']] as const).map(([k, l]) => <button key={k} className={s.axis === k ? 'on' : ''} onClick={() => s.setAxis(s.axis === k && k !== 'free' ? 'free' : k)} title={k === 'free' ? 'Any direction' : 'Key ' + k.toUpperCase()}>{l}</button>)}
+      </div>
+      <button className="btn" disabled={!sel} onClick={() => sel && startCarry(sel.id)} title="Enter">Pick up (Enter) · click or Enter drops · Esc cancels</button>
+    </div>
+    <ViewTools />
+    {tip(<>Drag an item · pink lines = aligned with another item · <kbd>R</kbd> turn · <kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd> lock axis · <kbd>Ctrl</kbd>+<kbd>D</kbd> copy</>)}
     {sel && <FurnPanel sel={sel} />}
   </>)
   if (mode === 'walls') return (<>
-    <p className="hint">The outer shell is locked. Blue handles move the original inner walls; green / purple handles are your new walls (purple square = move the whole wall). 5 cm snap, sticks to corners and walls.</p>
     <div className="seg">
       <button className={s.tool === 'move' ? 'on' : ''} onClick={() => s.setTool('move')}>Move</button>
       <button className={s.tool === 'add' ? 'on' : ''} onClick={() => s.setTool('add')}><Icon n="plus" size={14} /> Add wall</button>
     </div>
     {s.tool === 'add' && (<>
-      <p className="hint">Click the start point, then the end point. Esc cancels.</p>
+      {tip('Click start, then end. Esc cancels.')}
       <div className="two">
         <label>Thickness<select value={s.newThick} onChange={(e) => s.setNew({ newThick: +e.target.value })}>{[8, 10, 12, 20].map((t) => <option key={t} value={t}>{t} cm</option>)}</select></label>
         <label className="check"><input type="checkbox" checked={s.newDoor} onChange={(e) => s.setNew({ newDoor: e.target.checked })} /> doorway</label>
@@ -75,17 +108,17 @@ function ModePanel() {
         <button className="btn danger" onClick={() => s.removeWall(selWall.id)}><Icon n="trash" size={15} /> Delete wall</button>
       </div>
     )}
+    {tip('Outer walls are locked. Drag the blue handles; purple square moves a whole added wall.')}
     <button className="btn" onClick={s.resetWalls}>Reset walls</button>
   </>)
   // furniture
   const bad = s.furniture.filter((f) => misplaced(f, s.nodes, s.customWalls, s.furniture)).length
   return (<>
-    <p className="hint">Click an item to edit it (size, type, colour). To drag items around use <b>Move items</b>. <kbd>R</kbd> rotate · <kbd>Del</kbd> remove · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo.</p>
     <select className="wide" value="" onChange={(e) => e.target.value && s.addFurn(e.target.value as FType)}>
       <option value="">+ Add furniture…</option>
       {(Object.keys(CATALOG) as FType[]).map((t) => <option key={t} value={t}>{CATALOG[t].label}</option>)}
     </select>
-    {sel && <FurnPanel sel={sel} />}
+    {sel ? <FurnPanel sel={sel} /> : tip('Click an item to edit it. Use Move to drag.')}
     {bad > 0 && <div className="warn">⚠ {bad} item(s) don't fit <button className="btn sm" onClick={() => s.fixAll()}>Fix all</button></div>}
     <div className="row2"><button className="btn primary" onClick={() => useAI.getState().run()} disabled={!!useAI.getState().busy}><Icon n="sparkles" size={15} /> AI furnish</button><button className="btn" onClick={s.autoFurnish} title="Instant, always the same result">Offline rules</button></div>
     <button className="btn wide" onClick={s.clearFurniture}>Clear all</button>
