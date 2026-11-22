@@ -1,7 +1,7 @@
-import { useMemo, useRef } from 'react'
+import { useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { rooms, insetRoom, openingsOf, m, PX_PER_M, type Pt, type Wall, type Opening } from './plan'
+import { openingsOf, m, PX_PER_M, doorSwing } from './plan'
 import { useStore, useAllWalls } from './store'
 import { useUI } from './ui/uiStore'
 import { doorKey } from './wiring'
@@ -9,33 +9,6 @@ import { doorKey } from './wiring'
 const FRAME = '#f6f5f1'
 const LEAF = '#d9c7a8'
 const DOOR_ANGLE = [0, Math.PI / 4, Math.PI / 2]
-
-const inPoly = (p: [number, number], poly: [number, number][]) => {
-  let c = false
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const [xi, yi] = poly[i], [xj, yj] = poly[j]
-    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c
-  }
-  return c
-}
-const polyArea = (p: [number, number][]) => Math.abs(p.reduce((s, a, i) => { const b = p[(i + 1) % p.length]; return s + a[0] * b[1] - b[0] * a[1] }, 0)) / 2
-
-/** A door swings into the smaller of the two rooms it joins (bedroom / bathroom / loggia doors open inwards); into the flat for the entrance. */
-function defaultSwing(w: Wall, o: Opening, nodes: Record<string, Pt>, polys: { poly: [number, number][]; area: number }[]): 1 | -1 {
-  const A = nodes[w.a], B = nodes[w.b], L = Math.hypot(B[0] - A[0], B[1] - A[1])
-  const u = [(B[0] - A[0]) / L, (B[1] - A[1]) / L], n = [-u[1], u[0]], s = (o.from + o.to) / 2
-  const at = (sg: number): [number, number] => [m(A[0] + u[0] * s + n[0] * sg * (w.thick / 2 + 0.5 * PX_PER_M)), m(A[1] + u[1] * s + n[1] * sg * (w.thick / 2 + 0.5 * PX_PER_M))]
-  const rp = polys.find((q) => inPoly(at(1), q.poly)), rn = polys.find((q) => inPoly(at(-1), q.poly))
-  if (rp && !rn) return 1
-  if (rn && !rp) return -1
-  if (rp && rn) return rp.area <= rn.area ? 1 : -1
-  return 1
-}
-
-export function useDoorDefaults() {
-  const nodes = useStore((s) => s.nodes)
-  return useMemo(() => rooms.map((r) => { const poly = insetRoom(r, nodes).map(([x, y]) => [m(x), m(y)] as [number, number]); return { poly, area: polyArea(poly) } }), [nodes])
-}
 
 function Glass({ w, h, fancy }: { w: number; h: number; fancy: boolean }) {
   return (
@@ -118,7 +91,6 @@ export function Openings() {
   const mode = useStore((s) => s.mode)
   const tool = useStore((s) => s.openingTool)
   const sel = useStore((s) => s.selOpening)
-  const polys = useDoorDefaults()
   const fancy = useUI((s) => s.quality) === 'high'
   const editing = mode === 'openings'
 
@@ -137,7 +109,7 @@ export function Openings() {
           const cfg = doorState[key]
           const state = cfg?.state ?? (w.thick / PX_PER_M >= 0.21 ? 0 : 1)
           const hinge = cfg?.hinge ?? 'a'
-          const swing = cfg?.swing ?? defaultSwing(w, o, nodes, polys)
+          const swing = doorSwing(w, o, nodes, doorState)
           return (
             <group key={key} position={[cx, 0, cz]} rotation={[0, -ang, 0]}>
               {o.kind === 'window'
@@ -150,7 +122,7 @@ export function Openings() {
                     <meshBasicMaterial color={isSel ? '#ff8a00' : '#1e90ff'} transparent opacity={isSel ? 0.28 : 0.1} depthWrite={false} />
                   </mesh>
                   {isSel && (
-                    <lineSegments position={[0, (o.sill + o.top) / 2, 0]}>
+                    <lineSegments position={[0, (o.sill + o.top) / 2, 0]} raycast={() => {}}>
                       <edgesGeometry args={[new THREE.BoxGeometry(width + 0.02, o.top - o.sill + 0.02, thick + 0.14)]} /><lineBasicMaterial color="#ff8a00" depthTest={false} />
                     </lineSegments>
                   )}

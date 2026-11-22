@@ -1,6 +1,6 @@
 // Rule-based furnishing. Everything works in metres on the *clear* room outline (wall thickness already removed),
 // so nothing can end up inside a wall. Items shrink step by step (sizes lists) until they fit.
-import { rooms, walls as baseWalls, insetRoom, openingsOf, areaM2, flat, PX_PER_M, type Pt, type Wall, type Room } from './plan'
+import { rooms, walls as baseWalls, insetRoom, openingsOf, areaM2, flat, PX_PER_M, doorSwing, type Pt, type Wall, type Room, type Opening } from './plan'
 import { CATALOG, PRESETS, sizeOf, type FType, type Furn } from './catalog'
 import { DEFAULT_CRITERIA, type Criteria } from './criteria'
 
@@ -109,8 +109,16 @@ export function zones(all: Wall[], nodes: Record<string, Pt>) {
       const a = (o.end === 'b' ? L * PX_PER_M - o.to : o.from) / PX_PER_M
       const b = (o.end === 'b' ? L * PX_PER_M - o.from : o.to) / PX_PER_M
       if (o.kind === 'door') {
-        doors.push(box(a - 0.05, b + 0.05, 0.85))
-        if (w.thick / PX_PER_M >= 0.21) entrances.push(doors[doors.length - 1].c) // door in an exterior-thickness wall = flat entrance
+        // Account for actual door opening side: full leaf swing on the swing side, minimal threshold clearance on the other side
+        const sg = doorSwing(w, o, nodes)
+        const ht = w.thick / PX_PER_M / 2
+        const swingDepth = Math.max(0.55, Math.min(0.95, b - a))
+        const backClear = 0.05
+        const mid = (a + b) / 2
+        const off = sg * (swingDepth - backClear) / 2
+        const hz = ht + (swingDepth + backClear) / 2
+        doors.push({ c: [A[0] + u[0] * mid + v[0] * off, A[1] + u[1] * mid + v[1] * off], ax: u, az: v, hx: (b - a) / 2 + 0.05, hz })
+        if (w.thick / PX_PER_M >= 0.21) entrances.push([A[0] + u[0] * mid, A[1] + u[1] * mid]) // door in an exterior-thickness wall = flat entrance
       }
       else windows.push(box(a, b, 0.3))
     }
@@ -843,6 +851,30 @@ function nearest(f: Furn, list: Furn[]): { g: Furn; d: number; face: number } | 
   return best
 }
 export const misplaced = (f: Furn, nodes: Record<string, Pt>, customWalls: Wall[], others: Furn[] = []) => misplacedReason(f, nodes, customWalls, others) !== null
+
+/** If an item blocks a door's swing zone, return that door's wall, opening, and state key. */
+export function blockingDoor(f: Furn, nodes: Record<string, Pt>, customWalls: Wall[]): { wall: Wall; opening: Opening; key: string } | null {
+  const { w: fw, d: fd } = sizeOf(f)
+  if ((f.y ?? 0) >= 2.0) return null
+  const fo = mk(f.x, f.z, f.rot, fw, fd)
+  for (const wall of [...baseWalls, ...customWalls]) {
+    const A = toM(nodes[wall.a]), B = toM(nodes[wall.b]), L = dist(A, B)
+    if (L < 0.01) continue
+    const u: V = [(B[0] - A[0]) / L, (B[1] - A[1]) / L], v: V = [-u[1], u[0]]
+    const ht = wall.thick / PX_PER_M / 2
+    for (const o of openingsOf(wall, nodes)) {
+      if (o.kind !== 'door') continue
+      const a = (o.end === 'b' ? L * PX_PER_M - o.to : o.from) / PX_PER_M
+      const b = (o.end === 'b' ? L * PX_PER_M - o.from : o.to) / PX_PER_M
+      const sg = doorSwing(wall, o, nodes)
+      const swingDepth = Math.max(0.55, Math.min(0.95, b - a)), backClear = 0.05
+      const mid = (a + b) / 2, off = sg * (swingDepth - backClear) / 2, hz = ht + (swingDepth + backClear) / 2
+      const box: OBB = { c: [A[0] + u[0] * mid + v[0] * off, A[1] + u[1] * mid + v[1] * off], ax: u, az: v, hx: (b - a) / 2 + 0.05, hz }
+      if (overlaps(fo, box)) return { wall, opening: o, key: wall.id + ':' + (o.i ?? 0) }
+    }
+  }
+  return null
+}
 
 export type OverflowZone = {
   poly: [number, number][]

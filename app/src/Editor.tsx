@@ -516,19 +516,22 @@ export const Furniture = memo(function Furniture({ editable, movable = false, sh
   const draggingFurn = useStore((s) => s.drag?.kind === 'furn')
   const nodes = useStore((s) => s.nodes)
   const custom = useStore((s) => s.customWalls)
+  const doorState = useStore((s) => s.doorState)
   const [hovered, setHovered] = useState<string | null>(null)
   const deferredFurn = useDeferredValue(furniture)
 
   const badIds = useMemo(() => {
     const out = new Set<string>()
     if (!showBad) return out
+    void doorState
     for (const q of deferredFurn) if (misplaced(q, nodes, custom, deferredFurn)) out.add(q.id)
     return out
-  }, [showBad, deferredFurn, nodes, custom])
+  }, [showBad, deferredFurn, nodes, custom, doorState])
 
   // Exact overflow regions for all misplaced items (live for the selected item, deferred for others)
   const otherOverflows = useMemo(() => {
     if (!showBad) return [] as { id: string; zones: OverflowZone[] }[]
+    void doorState
     const out: { id: string; zones: OverflowZone[] }[] = []
     for (const q of deferredFurn) {
       if (q.id === sel || !badIds.has(q.id)) continue
@@ -536,12 +539,12 @@ export const Furniture = memo(function Furniture({ editable, movable = false, sh
       if (zs.length) out.push({ id: q.id, zones: zs })
     }
     return out
-  }, [showBad, deferredFurn, badIds, sel, nodes, custom])
+  }, [showBad, deferredFurn, badIds, sel, nodes, custom, doorState])
 
   const selItem = showBad && sel ? furniture.find((q) => q.id === sel) : undefined
   const selOverflows = useMemo(
-    () => (selItem ? overflowZones(selItem, nodes, custom, furniture) : []),
-    [selItem, nodes, custom, furniture],
+    () => { void doorState; return selItem ? overflowZones(selItem, nodes, custom, furniture) : [] },
+    [selItem, nodes, custom, furniture, doorState],
   )
 
   const onHover = useCallback((id: string) => setHovered(id), [])
@@ -590,6 +593,10 @@ export function Keys() {
       if (s.mode === 'walls') {
         if (e.key === 'Escape') s.drawStart ? s.setDrawStart(null) : s.setTool('move')
         else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selected?.[0] === 'c') s.removeWall(s.selected.slice(0, -1))
+        return
+      }
+      if (s.mode === 'openings' && !typing && (e.key === 'Delete' || e.key === 'Backspace') && s.selOpening) {
+        s.removeOpening(s.selOpening.wall, s.selOpening.i)
         return
       }
       if (s.drag?.carry) { if (e.key === 'Enter') { endCarry(false); return } if (e.key === 'Escape') { endCarry(true); return } }

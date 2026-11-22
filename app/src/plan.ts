@@ -96,6 +96,33 @@ export function roomAreas(nodes: Record<string, Pt>, custom: Wall[] = []) {
 export let openingOv: Record<string, Opening[]> = {}
 export function setOpeningOv(o: Record<string, Opening[]>) { openingOv = o }
 
+/** Door state overrides (open/closed, hinge, swing side) synced from the store. */
+export type DoorCfg = { state?: 0 | 1 | 2; hinge?: 'a' | 'b'; swing?: 1 | -1 }
+export let doorStateOv: Record<string, DoorCfg> = {}
+export function setDoorStateOv(d: Record<string, DoorCfg>) { doorStateOv = d }
+
+/** Default side (+1 or -1 along wall normal) a door swings into: smaller of the two rooms it joins, or into the flat for the entrance. */
+export function defaultDoorSwing(w: Wall, o: Opening, nodes: Record<string, Pt>): 1 | -1 {
+  const A = nodes[w.a], B = nodes[w.b]
+  if (!A || !B) return 1
+  const L = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1
+  const ux = (B[0] - A[0]) / L, uy = (B[1] - A[1]) / L, nx = -uy, ny = ux
+  const s = (o.from + o.to) / 2, off = w.thick / 2 + 0.5 * PX_PER_M
+  const polys = rooms.map((r) => { const poly = insetRoom(r, nodes); return { poly, area: areaM2(poly) } })
+  const at = (sg: number): Pt => [A[0] + ux * s + nx * sg * off, A[1] + uy * s + ny * sg * off]
+  const rp = polys.find((q) => inPoly(at(1), q.poly)), rn = polys.find((q) => inPoly(at(-1), q.poly))
+  if (rp && !rn) return 1
+  if (rn && !rp) return -1
+  if (rp && rn) return rp.area <= rn.area ? 1 : -1
+  return 1
+}
+
+/** Effective swing direction (+1 / -1 along wall normal) of a door, respecting user overrides. */
+export function doorSwing(w: Wall, o: Opening, nodes: Record<string, Pt>, ov: Record<string, DoorCfg> = doorStateOv): 1 | -1 {
+  const key = w.id + ':' + (o.i ?? 0)
+  return ov[key]?.swing ?? defaultDoorSwing(w, o, nodes)
+}
+
 /** Openings of a wall as absolute distances (px) from node a. A "doorway" wall gets a 90 cm door in the middle. */
 export function openingsOf(w: Wall, nodes: Record<string, Pt>): Opening[] {
   const [ax, ay] = nodes[w.a], [bx, by] = nodes[w.b]

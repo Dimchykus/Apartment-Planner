@@ -1,8 +1,8 @@
 import { useDeferredValue, useMemo, useState } from 'react'
 import { ROOM_KINDS, ZONE_ITEMS, kindInfo } from '../roomkinds'
-import { defaultKind, misplacedReason, allowedKinds, analyze, scoreLayout, balanced, conflicts, type RoomKind } from '../autofurnish'
+import { defaultKind, misplacedReason, blockingDoor, allowedKinds, analyze, scoreLayout, balanced, conflicts, type RoomKind } from '../autofurnish'
 import { CRITERIA_KEYS, CRITERIA_PRESETS, presetOf } from '../criteria'
-import { rooms as planRooms } from '../plan'
+import { rooms as planRooms, doorSwing } from '../plan'
 import { useStore, CATALOG, type Furn } from '../store'
 import { useUI } from './uiStore'
 import { PRESETS, STYLES, FINISHES, sizeOf } from '../catalog'
@@ -137,6 +137,8 @@ export function FurnPanel({ sel }: { sel: Furn }) {
   const nodes = useStore((s) => s.nodes)
   const customWalls = useStore((s) => s.customWalls)
   const furniture = useStore((s) => s.furniture)
+  const doorState = useStore((s) => s.doorState)
+  const setDoor = useStore((s) => s.setDoor)
   const patchFurn = useStore((s) => s.patchFurn)
   const fitOne = useStore((s) => s.fitOne)
   const duplicateFurn = useStore((s) => s.duplicateFurn)
@@ -149,7 +151,8 @@ export function FurnPanel({ sel }: { sel: Furn }) {
   const styles = STYLES[sel.type]
   const patch = (p: Partial<Furn>) => patchFurn(sel.id, p)
   const [fitMsg, setFitMsg] = useState('')
-  const reason = useMemo(() => misplacedReason(deferredSel, nodes, customWalls, deferredFurn), [deferredSel, nodes, customWalls, deferredFurn])
+  const reason = useMemo(() => { void doorState; return misplacedReason(deferredSel, nodes, customWalls, deferredFurn) }, [deferredSel, nodes, customWalls, deferredFurn, doorState])
+  const blockedDoor = useMemo(() => { void doorState; return reason === 'blocks a door' ? blockingDoor(deferredSel, nodes, customWalls) : null }, [reason, deferredSel, nodes, customWalls, doorState])
   const cmv = (v: number) => Math.round(v * 100)
   const wide = sel.type === 'kitchen' || sel.type === 'wardrobe'
   const range = (base: number, lo: number, hi: number): [number, number] => [Math.round(Math.max(0.2, base * lo) * 100), Math.round(base * hi * 100)]
@@ -166,7 +169,12 @@ export function FurnPanel({ sel }: { sel: Furn }) {
       )}
       {reason && (
         <div className="warn">⚠ {reason}
-          <button onClick={() => setFitMsg(fitOne(sel.id) ? 'Moved to fit.' : "Couldn't fit by nudging. Try moving or resizing it.")}>Fit to space</button>
+          <div className="row2">
+            <button onClick={() => setFitMsg(fitOne(sel.id) ? 'Moved to fit.' : "Couldn't fit by nudging. Try moving or resizing it.")}>Fit to space</button>
+            {blockedDoor && (
+              <button onClick={() => setDoor(blockedDoor.key, { swing: doorSwing(blockedDoor.wall, blockedDoor.opening, nodes, doorState) === 1 ? -1 : 1 })}>⤾ Flip door side</button>
+            )}
+          </div>
           {fitMsg && <small>{fitMsg}</small>}
         </div>
       )}

@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { create } from 'zustand'
-import { rooms, walls as baseWalls, constrainNode, snapPoint, PX_PER_M, activateFlat, m, initialNodes, openingsOf, setOpeningOv, type Pt, type Wall, type Opening } from './plan'
+import { rooms, walls as baseWalls, constrainNode, snapPoint, PX_PER_M, activateFlat, m, initialNodes, openingsOf, setOpeningOv, setDoorStateOv, type Pt, type Wall, type Opening } from './plan'
 import { FLATS, BUILTIN_IDS } from './flats'
 import { autoFurnish, inRoom, fitFurn, misplaced, misplacedReason, allowedKinds, type RoomKind } from './autofurnish'
 import { DEFAULT_CRITERIA, type Criteria } from './criteria'
@@ -50,7 +50,7 @@ type State = {
   setOpeningTool: (t: 'select' | 'add') => void
   setOpeningPreset: (p: PresetId) => void
   addOpening: (wall: string, atPx: number, preset?: PresetId) => boolean
-  editOpening: (wall: string, i: number, p: { width?: number; sill?: number; top?: number; centre?: number; kind?: 'window' | 'door'; glass?: boolean }) => void
+  editOpening: (wall: string, i: number, p: { width?: number | 'wall'; sill?: number; top?: number; centre?: number; kind?: 'window' | 'door'; glass?: boolean }) => void
   removeOpening: (wall: string, i: number) => void
   toggleLight: (room: string, group: LightGroup) => void
   setLightsAll: (on: boolean | undefined) => void
@@ -145,6 +145,7 @@ function flatState(id: string) {
   const roomKinds = sv.roomKinds ?? {}, hintOv = sv.hintOv ?? {}, criteria = { ...DEFAULT_CRITERIA, ...(sv.criteria ?? {}) }
   const openings = sv.openings ?? {}, doorState = sv.doorState ?? {}, roomStyle = sv.roomStyle ?? {}, lightOv = sv.lightOv ?? {}
   setOpeningOv(openings) // before furnishing: furniture keeps clear of the (edited) windows and doors
+  setDoorStateOv(doorState)
   const furniture = sv.furniture ?? autoFurnish(nodes, customWalls, { kinds: roomKinds, hints: hintOv, criteria })
   const el = autoElectrics(nodes, customWalls, furniture, roomKinds, (k) => doorState[k] ?? {})
   const versions: Ver[] = sv.versions?.length ? sv.versions : [{ id: 'v1', name: 'Layout 1', furniture, created: Date.now() }]
@@ -185,7 +186,9 @@ export const useStore = create<State>((set) => ({
     const fit = fitOpening(L, PX_PER_M, cur, { from: atPx - width / 2, to: atPx + width / 2 }, null)
     if (!fit) { useUI.getState().showToast('There is no room for that on this wall piece.'); return false }
     const o: Opening = { from: fit.from, to: fit.to, sill: pr.sill, top: pr.top, kind: pr.kind, ...(pr.glass ? { glass: true } : {}) }
-    set({ openings: { ...s.openings, [wall]: [...cur, o] }, selOpening: { wall, i: cur.length } })
+    const nextOpenings = { ...s.openings, [wall]: [...cur, o] }
+    setOpeningOv(nextOpenings)
+    set({ openings: nextOpenings, selOpening: { wall, i: cur.length } })
     useStore.getState().regenElectrics()
     return true
   },
@@ -196,14 +199,20 @@ export const useStore = create<State>((set) => ({
     const cur = openingsOf(w, s.nodes).map((o) => { const c = { ...o }; delete c.i; return c as Opening })
     const o = cur[i]
     if (!o) return
-    const width = p.width !== undefined ? p.width * PX_PER_M : o.to - o.from
+    const wantW = p.width === 'wall' ? Math.max(o.to - o.from, L - 0.3 * PX_PER_M) : p.width !== undefined ? p.width * PX_PER_M : o.to - o.from
     const centre = p.centre !== undefined ? p.centre * PX_PER_M : (o.from + o.to) / 2
-    const fit = fitOpening(L, PX_PER_M, cur, { from: centre - width / 2, to: centre + width / 2 }, i)
+    let fit = fitOpening(L, PX_PER_M, cur, { from: centre - wantW / 2, to: centre + wantW / 2 }, i)
+    // If widening doesn't fit next to another opening, still apply sill/top/kind changes at the current span
+    if (!fit && (p.sill !== undefined || p.top !== undefined || p.kind !== undefined || p.glass !== undefined)) {
+      fit = { from: o.from, to: o.to }
+    }
     if (!fit) return
     let sill = p.sill ?? o.sill, top = p.top ?? o.top
     top = Math.min(2.65, Math.max(top, sill + 0.3)); sill = Math.max(0, Math.min(sill, top - 0.3))
     const next = [...cur]; next[i] = { ...o, ...fit, sill, top, ...(p.kind ? { kind: p.kind } : {}), ...(p.glass !== undefined ? { glass: p.glass } : {}) }
-    set({ openings: { ...s.openings, [wall]: next } })
+    const nextOpenings = { ...s.openings, [wall]: next }
+    setOpeningOv(nextOpenings)
+    set({ openings: nextOpenings })
     useStore.getState().regenElectrics()
   },
   removeOpening: (wall, i) => {
@@ -211,7 +220,9 @@ export const useStore = create<State>((set) => ({
     if (!w) return
     const cur = openingsOf(w, s.nodes).map((o) => { const c = { ...o }; delete c.i; return c as Opening })
     cur.splice(i, 1)
-    set({ openings: { ...s.openings, [wall]: cur }, selOpening: null })
+    const nextOpenings = { ...s.openings, [wall]: cur }
+    setOpeningOv(nextOpenings)
+    set({ openings: nextOpenings, selOpening: null })
     useStore.getState().regenElectrics()
   },
   toggleLight: (room, group) => set((s) => {
@@ -227,16 +238,18 @@ export const useStore = create<State>((set) => ({
     const st = useStore.getState(), p = st.past[st.past.length - 1]
     if (!p) return
     applying = true
+    setOpeningOv(p.openings); setDoorStateOv(p.doorState)
     set({ ...p, past: st.past.slice(0, -1), future: [...st.future, snapOf(st)], selected: null, drag: null, selOpening: null })
-    setOpeningOv(p.openings); useStore.getState().regenElectrics()
+    useStore.getState().regenElectrics()
     applying = false; lastPush = 0
   },
   redo: () => {
     const st = useStore.getState(), n = st.future[st.future.length - 1]
     if (!n) return
     applying = true
+    setOpeningOv(n.openings); setDoorStateOv(n.doorState)
     set({ ...n, future: st.future.slice(0, -1), past: [...st.past, snapOf(st)], selected: null, drag: null, selOpening: null })
-    setOpeningOv(n.openings); useStore.getState().regenElectrics()
+    useStore.getState().regenElectrics()
     applying = false; lastPush = 0
   },
   switchFlat: (id) => {
@@ -415,7 +428,10 @@ export const useStore = create<State>((set) => ({
   },
 }))
 
-useStore.subscribe((s, prev) => { if (s.openings !== prev.openings) setOpeningOv(s.openings) })
+useStore.subscribe((s, prev) => {
+  if (s.openings !== prev.openings) setOpeningOv(s.openings)
+  if (s.doorState !== prev.doorState) setDoorStateOv(s.doorState)
+})
 // lights and switches follow the furniture (kitchen spots, bedside lamps, switches never behind a wardrobe)
 let electricsTimer: ReturnType<typeof setTimeout> | undefined
 useStore.subscribe((s, prev) => {
