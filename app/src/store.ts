@@ -372,6 +372,10 @@ export const useStore = create<State>((set) => ({
       const item = f(id, type, m(cx), m(cy))
       if (type === 'shelf') item.y = 1.5
       if (type === 'tv') item.y = 0.9
+      if (type === 'gamingDesk') { // the player's chair comes with the setup, in front of the desk, and moves with it
+        const chair: Furn = { ...f(id + 'c', 'gamingChair', item.x, item.z + CATALOG.gamingDesk.d / 2 + 0.38, Math.PI), group: id }
+        return { furniture: [...s.furniture, item, chair], selected: id }
+      }
       return { furniture: [...s.furniture, item], selected: id }
     })
   },

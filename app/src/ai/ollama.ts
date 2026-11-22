@@ -135,3 +135,47 @@ export async function diagnose(s: AISettings, opts: { test?: boolean } = {}): Pr
   } finally { t4.done() }
   return out
 }
+
+// ───────────────────────── installed models, download, delete ─────────────────────────
+export type ModelInfo = { name: string; size: number }
+export type CatalogModel = { name: string; label: string; kind: 'text' | 'vision'; size: string; note: string }
+export const MODEL_CATALOG: CatalogModel[] = [
+  { name: 'qwen2.5:14b', label: 'Qwen 2.5 14B', kind: 'text', size: '9 GB', note: 'Furniture layouts. Recommended, needs ~12 GB of memory.' },
+  { name: 'qwen2.5:7b', label: 'Qwen 2.5 7B', kind: 'text', size: '4.7 GB', note: 'Furniture layouts on smaller computers (8 GB).' },
+  { name: 'qwen2.5vl:7b', label: 'Qwen 2.5 VL 7B', kind: 'vision', size: '6 GB', note: 'Reads plan pictures: walls, doors, windows. Best first choice.' },
+  { name: 'llama3.2-vision:11b', label: 'Llama 3.2 Vision 11B', kind: 'vision', size: '7.8 GB', note: 'Reads plan pictures. Bigger, needs ~12 GB.' },
+  { name: 'gemma3:4b', label: 'Gemma 3 4B', kind: 'vision', size: '3.3 GB', note: 'Light vision model for small computers.' },
+  { name: 'minicpm-v:8b', label: 'MiniCPM-V 8B', kind: 'vision', size: '5.5 GB', note: 'Reads plan pictures, good with small print.' },
+]
+export const fmtSize = (b: number) => (b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.round(b / 1e6) + ' MB')
+
+export async function listModelInfo(url: string, signal?: AbortSignal): Promise<ModelInfo[]> {
+  const r = await fetch(base(url) + '/api/tags', { signal })
+  if (!r.ok) throw new Error('Ollama answered ' + r.status)
+  return ((await r.json()).models ?? []).map((m: { name: string; size?: number }) => ({ name: m.name, size: m.size ?? 0 }))
+}
+
+/** Download a model; progress is 0..1 (null while the size is not known yet). */
+export async function pullModel(url: string, name: string, onProgress: (status: string, pct: number | null) => void, signal?: AbortSignal): Promise<void> {
+  const r = await fetch(base(url) + '/api/pull', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name, stream: true }) })
+  if (!r.ok || !r.body) throw new Error('Ollama answered ' + r.status + ': ' + (await r.text()).slice(0, 200))
+  const rd = r.body.getReader(), dec = new TextDecoder()
+  let buf = ''
+  for (;;) {
+    const { done, value } = await rd.read()
+    if (done) break
+    buf += dec.decode(value, { stream: true })
+    const lines = buf.split('\n'); buf = lines.pop() ?? ''
+    for (const ln of lines) {
+      if (!ln.trim()) continue
+      const d = JSON.parse(ln)
+      if (d.error) throw new Error(d.error)
+      onProgress(String(d.status ?? ''), d.total ? Math.min(1, (d.completed ?? 0) / d.total) : null)
+    }
+  }
+}
+
+export async function deleteModel(url: string, name: string): Promise<void> {
+  const r = await fetch(base(url) + '/api/delete', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: name }) })
+  if (!r.ok) throw new Error('Could not delete: ' + (await r.text()).slice(0, 200))
+}

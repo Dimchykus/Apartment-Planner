@@ -52,7 +52,7 @@ export const SunLight = memo(function SunLight({ env, cx, cz, quality = 'med' }:
   const target = useMemo(() => new THREE.Object3D(), [])
   useEffect(() => { target.position.set(cx, 0, cz); target.updateMatrixWorld(); if (ref.current) ref.current.target = target }, [cx, cz, target])
   const d = new THREE.Vector3(...e.sun).normalize().multiplyScalar(28)
-  const sm = quality === 'high' ? 4096 : quality === 'med' ? 2048 : 1024
+  const sm = quality === 'high' ? 3072 : quality === 'med' ? 2048 : 1024
   return (
     <>
       <primitive object={target} />

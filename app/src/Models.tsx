@@ -252,6 +252,75 @@ function Desk({ color }: P) {
   </>)
 }
 
+/** Light-emitting bit (screens, RGB strips, fans). */
+const Glow = ({ p, s, c, i = 1.4, rot }: { p: [number, number, number]; s: [number, number, number]; c: string; i?: number; rot?: [number, number, number] }) => {
+  const op = useContext(FurnOpacity)
+  return <mesh position={p} rotation={rot}><boxGeometry args={s} /><meshStandardMaterial color={c} emissive={c} emissiveIntensity={i} toneMapped={false} transparent={op < 0.99} opacity={op} /></mesh>
+}
+const BLACK = '#0f1013'
+
+/** Desk with two monitors on stands, keyboard, mouse, desk mat, a PC tower with lit fans under the right side and RGB strips. Back (monitors) is at -z, the player sits on the +z side. */
+function GamingDesk({ color }: P) {
+  const monitor = (x: number, a: number) => (
+    <group key={x} position={[x, 0.76, -0.2]} rotation={[0, a, 0]}>
+      <B p={[0, 0.008, 0.02]} s={[0.24, 0.016, 0.17]} c={BLACK} r={0.006} metal={0.4} rough={0.4} />
+      <B p={[0, 0.15, 0]} s={[0.05, 0.3, 0.03]} c={BLACK} r={0.01} metal={0.4} rough={0.4} />
+      <B p={[0, 0.3, 0.02]} s={[0.62, 0.36, 0.025]} c={BLACK} r={0.008} rough={0.35} />
+      <Glow p={[0, 0.3, 0.036]} s={[0.59, 0.33, 0.004]} c="#2a63ff" i={0.9} />
+      <Glow p={[0.08, 0.34, 0.039]} s={[0.3, 0.12, 0.002]} c="#9b5cff" i={1.1} />
+    </group>
+  )
+  return (<>
+    <B p={[0, 0.74, 0]} s={[1.6, 0.04, 0.75]} c={color} r={0.012} rough={0.5} />
+    {[-0.72, 0.72].map((x) => <B key={x} p={[x, 0.36, 0]} s={[0.05, 0.72, 0.66]} c={BLACK} r={0.01} metal={0.5} rough={0.4} />)}
+    <B p={[0, 0.45, -0.3]} s={[1.38, 0.3, 0.02]} c={BLACK} r={0.005} />
+    <Glow p={[0, 0.712, 0.368]} s={[1.5, 0.008, 0.008]} c="#8a3cff" i={1.8} />
+    <Glow p={[0, 0.712, -0.368]} s={[1.5, 0.008, 0.008]} c="#2dd4ff" i={1.4} />
+    <B p={[0, 0.7635, 0.1]} s={[0.95, 0.004, 0.38]} c="#17181d" r={0.002} rough={0.95} />
+    {monitor(-0.32, 0.2)}{monitor(0.32, -0.2)}
+    <B p={[-0.08, 0.78, 0.14]} s={[0.44, 0.02, 0.14]} c={BLACK} r={0.006} rough={0.5} />
+    <Glow p={[-0.08, 0.791, 0.14]} s={[0.4, 0.002, 0.1]} c="#ff3d81" i={0.8} />
+    <B p={[0.28, 0.78, 0.14]} s={[0.065, 0.03, 0.11]} c={BLACK} r={0.02} rough={0.4} />
+    <group position={[0.5, 0.25, 0.02]}>
+      <B p={[0, 0, 0]} s={[0.22, 0.5, 0.46]} c={BLACK} r={0.012} metal={0.3} rough={0.4} />
+      <B p={[-0.112, 0, 0]} s={[0.006, 0.44, 0.4]} c="#1b2430" r={0.003} rough={0.1} />
+      {[0.12, -0.04, -0.2].map((y) => <mesh key={y} position={[0, y, 0.232]} rotation={[Math.PI / 2, 0, 0]}><torusGeometry args={[0.05, 0.007, 8, 24]} /><meshStandardMaterial color="#8a3cff" emissive="#8a3cff" emissiveIntensity={1.8} toneMapped={false} /></mesh>)}
+    </group>
+  </>)
+}
+
+/** Racing-style gaming chair: tall back with side wings and headrest, armrests, five-star base on wheels. Front is +z. */
+function GamingChair({ color }: P) {
+  const BODY = '#1b1c20'
+  return (<>
+    <B p={[0, 0.5, 0.02]} s={[0.56, 0.1, 0.54]} c={BODY} r={0.04} rough={0.8} />
+    {[-0.29, 0.29].map((x) => <B key={x} p={[x, 0.56, 0.0]} s={[0.07, 0.12, 0.5]} c={color} r={0.03} rough={0.8} />)}
+    <group position={[0, 0.9, -0.25]} rotation={[-0.16, 0, 0]}>
+      <B p={[0, 0, 0]} s={[0.5, 0.74, 0.1]} c={BODY} r={0.05} rough={0.8} />
+      {[-0.27, 0.27].map((x) => <B key={x} p={[x, -0.05, 0.03]} s={[0.07, 0.56, 0.14]} c={color} r={0.03} rough={0.8} />)}
+      <B p={[0, 0.5, 0.02]} s={[0.28, 0.17, 0.09]} c={BODY} r={0.05} rough={0.9} />
+      <B p={[0, 0.5, 0.07]} s={[0.26, 0.04, 0.02]} c={color} r={0.01} />
+      <B p={[0, -0.05, 0.057]} s={[0.04, 0.5, 0.012]} c={color} r={0.004} />
+    </group>
+    {[-0.33, 0.33].map((x) => (
+      <group key={x}>
+        <B p={[x, 0.66, 0.03]} s={[0.07, 0.04, 0.32]} c={BODY} r={0.015} />
+        <B p={[x, 0.58, 0.05]} s={[0.03, 0.16, 0.04]} c={METAL} metal={0.8} rough={0.3} />
+      </group>
+    ))}
+    <B p={[0, 0.34, 0]} s={[0.07, 0.24, 0.07]} c={METAL} r={0.02} metal={0.8} rough={0.3} />
+    {[0, 1, 2, 3, 4].map((i) => {
+      const a = (i / 5) * Math.PI * 2
+      return (
+        <group key={i} rotation={[0, a, 0]}>
+          <B p={[0, 0.1, 0.17]} s={[0.04, 0.025, 0.34]} c={BODY} r={0.01} metal={0.4} />
+          <mesh position={[0, 0.04, 0.33]} castShadow><sphereGeometry args={[0.035, 12, 10]} /><meshStandardMaterial color="#222" roughness={0.6} /></mesh>
+        </group>
+      )
+    })}
+  </>)
+}
+
 export function Model({ type, color, w, low, style }: { type: FType; color: string; w?: number; low?: boolean; style?: string }) {
   switch (type) {
     case 'sofa': return <Sofa color={color} style={style} />
@@ -276,5 +345,7 @@ export function Model({ type, color, w, low, style }: { type: FType; color: stri
     case 'dresser': return <Dresser color={color} />
     case 'shoeCabinet': return <ShoeCabinet color={color} />
     case 'desk': return <Desk color={color} />
+    case 'gamingDesk': return <GamingDesk color={color} />
+    case 'gamingChair': return <GamingChair color={color} />
   }
 }
