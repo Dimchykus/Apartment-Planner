@@ -75,14 +75,20 @@ try {
     assert.ok(Math.abs(st.getState().furniture[0].x - (x0 + 0.5)) < 1e-4, 'redo should reapply x')
   })
 
-  test('Undo / Redo: addFurn, rotate, and removeFurn are each undoable', () => {
+  test('Undo / Redo: addFurn enters cursor-carry mode, placing is 1 step, rotate and removeFurn are each undoable', () => {
     reset()
     const st = useStore
     const n0 = st.getState().furniture.length
     st.getState().addFurn('treadmill')
     assert.equal(st.getState().furniture.length, n0 + 1)
+    assert.equal(st.getState().drag?.carry, true, 'addFurn should start carry mode following mouse')
     const id = st.getState().selected
     assert.ok(id)
+
+    // Move under mouse and drop -> still 1 undo step total for adding + placing
+    st.getState().moveFurn(id, 3.0, 4.0)
+    st.getState().setDrag(null)
+    assert.equal(st.getState().past.length, 1, 'add + cursor placement should be 1 undo step')
 
     st.getState().patchFurn(id, { rot: Math.PI / 2 })
     st.getState().removeFurn(id)

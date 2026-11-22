@@ -182,10 +182,17 @@ function snapFurn(id: string, rawX: number, rawZ: number, axis: 'free' | 'x' | '
   return { x: nx, z: nz, guide: gx !== undefined || gz !== undefined ? { x: gx, z: gz } : null }
 }
 
-/** Drop a carried item (click / Enter) or put it back (Esc). */
+/** Drop a carried item (click / Enter) or put it back / remove if newly added (Esc). */
 export function endCarry(cancel: boolean) {
   const st = useStore.getState(), d = st.drag
-  if (d?.carry && d.kind === 'furn') { if (cancel) { st.moveFurn(d.id, d.sx ?? 0, d.sz ?? 0); st.patchFurn(d.id, { y: d.sy || undefined }) } st.setDrag(null); st.setGuide(null) }
+  if (d?.carry && d.kind === 'furn') {
+    if (cancel) {
+      if (d.isNew) { st.undo(); return }
+      st.moveFurn(d.id, d.sx ?? 0, d.sz ?? 0)
+      st.patchFurn(d.id, { y: d.sy || undefined })
+    }
+    st.setDrag(null); st.setGuide(null)
+  }
 }
 export function startCarry(id: string) {
   const st = useStore.getState(), f = st.furniture.find((q) => q.id === id)
@@ -274,7 +281,7 @@ export function DragPlane() {
       }
     }
     const onDown = (ev: PointerEvent) => {
-      if (useStore.getState().drag?.carry && ev.target === gl.domElement) endCarry(false)
+      if (ev.button === 0 && useStore.getState().drag?.carry && ev.target === gl.domElement) endCarry(false)
     }
 
     addEventListener('pointermove', onMove)
@@ -288,7 +295,11 @@ export function DragPlane() {
     }
   }, [drag, camera, gl])
 
-  return null
+  return drag?.carry ? (
+    <Html fullscreen style={{ pointerEvents: 'none' }}>
+      <div className="banner">Click to place · R to rotate · Esc to cancel</div>
+    </Html>
+  ) : null
 }
 
 /** Alignment guide lines shown while moving furniture. */
@@ -429,6 +440,7 @@ const FurnItem = memo(function FurnItem({ q, on, hov, bad, editable, movable, on
       onPointerDown={editable ? (e) => {
         e.stopPropagation()
         const st = useStore.getState()
+        if (st.drag?.carry) { endCarry(false); return }
         const ids = hitFurnIds(e.intersections)
         let pickId = ids[0] ?? q.id
         // If multiple items overlap along the click ray, clicking again cycles through them

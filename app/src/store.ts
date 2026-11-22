@@ -85,7 +85,7 @@ type State = {
   cursor: Pt | null
   newThick: number // cm
   newDoor: boolean
-  drag: { kind: 'node' | 'furn' | 'wall'; id: string; dx: number; dz: number; carry?: boolean; sx?: number; sz?: number; sy?: number; cy?: number } | null
+  drag: { kind: 'node' | 'furn' | 'wall'; id: string; dx: number; dz: number; carry?: boolean; isNew?: boolean; sx?: number; sz?: number; sy?: number; cy?: number } | null
   axis: 'free' | 'x' | 'y' | 'z'        // move lock: x = left-right, y = forward-back (plan), z = height
   setAxis: (a: 'free' | 'x' | 'y' | 'z') => void
   guide: { x?: number; z?: number } | null
@@ -395,11 +395,12 @@ export const useStore = create<State>((set) => ({
       if (type === 'shelf') item.y = 1.5
       if (type === 'tv' || type === 'mirror') item.y = 0.9
       if (type === 'ac') item.y = 2.25
+      const carryDrag = { kind: 'furn' as const, id, dx: 0, dz: 0, carry: true, isNew: true, sx: item.x, sz: item.z, sy: item.y ?? 0, cy: 0 }
       if (type === 'gamingDesk') { // the player's chair comes with the setup, in front of the desk, and moves with it
         const chair: Furn = { ...f(id + 'c', 'gamingChair', item.x, item.z + CATALOG.gamingDesk.d / 2 + 0.38, Math.PI), group: id }
-        return { furniture: [...s.furniture, item, chair], selected: id }
+        return { furniture: [...s.furniture, item, chair], selected: id, drag: carryDrag }
       }
-      return { furniture: [...s.furniture, item], selected: id }
+      return { furniture: [...s.furniture, item], selected: id, drag: carryDrag }
     })
   },
   removeFurn: (id) => set((s) => ({ furniture: s.furniture.filter((q) => q.id !== id && q.group !== id), selected: null })),

@@ -145,7 +145,7 @@ function ModePanel() {
   // furniture
   const bad = s.furniture.filter((f) => misplaced(f, s.nodes, s.customWalls, s.furniture)).length
   return (<>
-    <select className="wide" value="" onChange={(e) => e.target.value && s.addFurn(e.target.value as FType)}>
+    <select className="wide" value="" onChange={(e) => { if (e.target.value) { s.addFurn(e.target.value as FType); e.target.blur() } }}>
       <option value="">+ Add furniture…</option>
       {(Object.keys(CATALOG) as FType[]).map((t) => <option key={t} value={t}>{CATALOG[t].label}</option>)}
     </select>
