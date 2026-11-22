@@ -65,7 +65,7 @@ function wallSegments(): Seg[] {
 
 /**
  * Magnetic snap for moving furniture:
- * - Presses flush (0 cm) against walls within 14 cm, while still allowing pass-through if dragged further.
+ * - Presses flush (0 cm) against walls within 5 cm, while still allowing pass-through if dragged further.
  * - Presses flush (0 cm) against touching items within 9 cm.
  * - Aligns edges / centres to other items within 5 cm (pink guides).
  */
@@ -77,7 +77,7 @@ function snapFurn(id: string, rawX: number, rawZ: number, axis: 'free' | 'x' | '
     return { hx: (s.w * c + s.d * si) / 2, hz: (s.w * si + s.d * c) / 2 }
   }
   const a = ext(me), s = sizeOf(me)
-  const WALL_SNAP = 0.14, ITEM_SNAP = 0.09, ALIGN_SNAP = 0.05
+  const WALL_SNAP = 0.05, ITEM_SNAP = 0.09, ALIGN_SNAP = 0.05
   let bestDx = WALL_SNAP, bestDz = WALL_SNAP
   let snapX: number | null = null, snapZ: number | null = null
   let gx: number | undefined, gz: number | undefined
