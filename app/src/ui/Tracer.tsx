@@ -5,7 +5,7 @@ import {
   ROOM_TYPES, roomType, emptyTrace, addWall, removeWall, faces, faceAt, netFaceArea, netFace, interiorPoint, projectOnSeg, loadImage, buildFlat, newFlatId,
   type TraceState, type UserFlat, type RoomTypeId, type Face,
 } from '../lib/library'
-import { getUserFlat, saveUserFlat } from '../lib/libraryActions'
+import { getUserFlat, saveUserFlat, bakeAppEdits } from '../lib/libraryActions'
 import { detectPlan, type Detected } from '../lib/detect'
 import { attachOpenings, reattach, moveNodes, mergeNodes, nodeNear, alignTo, pruneNodes, resizeRoom, type Attach } from '../lib/traceEdit'
 import { useAI } from '../ai/aiStore'
@@ -33,7 +33,8 @@ export function Tracer() {
   const editing = tr?.id ?? null
 
   const [rec, setRec] = useState<Rec>(() => {
-    const ex = editing ? getUserFlat(editing) : null
+    const ex0 = editing ? getUserFlat(editing) : null
+    const ex = ex0 ? bakeAppEdits(ex0) : null // in-app edits of doors / windows / inner walls are part of what is traced
     return ex ? { id: ex.id, name: ex.name, image: ex.image, imgW: ex.imgW, imgH: ex.imgH, trace: ex.trace, created: ex.created } : { id: newFlatId(), name: 'My flat', image: '', imgW: 0, imgH: 0, trace: emptyTrace(), created: Date.now() }
   })
   const [step, setStep] = useState<Step>(editing ? 'walls' : 'image')
@@ -389,7 +390,7 @@ export function Tracer() {
   const roomsArea = result && 'def' in result ? result.netTotal : 0
   const save = () => {
     setErr('')
-    const e = saveUserFlat({ ...rec, name: rec.name.trim() || 'My flat', updated: Date.now() }, { switchTo: true })
+    const e = saveUserFlat({ ...rec, name: rec.name.trim() || 'My flat', updated: Date.now() }, { switchTo: true, migrate: !!editing })
     if (e) { setErr(e); return }
     showToast('Flat saved: ' + (rec.name.trim() || 'My flat'))
     close()

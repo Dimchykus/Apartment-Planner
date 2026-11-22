@@ -311,7 +311,7 @@ export const useStore = create<State>((set) => ({
   mode: 'view',
   selected: null,
   drag: null,
-  setMode: (mode) => set({ mode, selected: null, selOpening: null, selRoom: null, placing: null, tool: 'move', drawStart: null }),
+  setMode: (m) => set({ mode: m === 'walls' ? 'openings' : m, /* walls are edited only in the plan tracer, never in the finished flat */ selected: null, selOpening: null, selRoom: null, placing: null, tool: 'move', drawStart: null }),
   setTool: (tool) => set({ tool, drawStart: null, cursor: null, selected: null, selOpening: null }),
   setDrawStart: (drawStart) => set({ drawStart }),
   setCursor: (cursor) => set({ cursor }),
@@ -523,6 +523,7 @@ export const useAllWalls = (): Wall[] => {
 
 /** The saved state of a flat (furniture, layouts, edits, room kinds ...): a copy, or undefined if nothing is saved. */
 export function getFlatSave(id: string): FlatSave | undefined {
+  if (saveTimer) flushSave() // a change made a moment ago is not written yet
   const sv = save.flats?.[id]
   return sv ? structuredClone(sv) : undefined
 }

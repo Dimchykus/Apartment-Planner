@@ -5,12 +5,12 @@ import { useStore, shareLink, CATALOG, type FType } from '../store'
 import { isWallMounted } from '../catalog'
 import { FLATS, BUILTIN_IDS } from '../flats'
 import { ENVS } from '../Outside'
-import { roomAreas, totalArea, STATED_TOTAL, PX_PER_M, insetRoom, rooms as planRooms } from '../plan'
+import { roomAreas, totalArea, STATED_TOTAL, insetRoom, rooms as planRooms } from '../plan'
 import { roomSize } from '../Dims'
 import { kindInfo } from '../roomkinds'
 import { misplaced } from '../autofurnish'
 import { CriteriaPanel, SpaceSummary, RoomsPanel, FurnPanel } from './Panels'
-import { StylePanel, OpeningsPanel, DoorLightControls, SelectedOpeningCard, OpeningsList } from './StylePanels'
+import { StylePanel, OpeningsPanel, DoorLightControls } from './StylePanels'
 import { AiPanel } from './AiPanel'
 import { DimsPanel } from './DimsPanel'
 import { useAI } from '../ai/aiStore'
@@ -34,7 +34,7 @@ export function Card({ id, title, icon, dflt = true, badge, children }: { id: st
 }
 
 const MODE_TITLES: Record<string, [string, string]> = {
-  view: ['Look around', 'orbit'], walk: ['Walk through', 'walk'], fly: ['Free flight', 'fly'], walls: ['Walls', 'walls'], furniture: ['Furniture', 'box'],
+  view: ['Look around', 'orbit'], walk: ['Walk through', 'walk'], fly: ['Free flight', 'fly'], walls: ['Doors & windows', 'door'], furniture: ['Furniture', 'box'],
   move: ['Move items', 'move'], rooms: ['Rooms & zones', 'rooms'], dims: ['Dimensions', 'ruler'], style: ['Walls & floors', 'palette'], openings: ['Doors & windows', 'door'],
 }
 
@@ -86,7 +86,6 @@ function ModePanel() {
   const s = useStore()
   const on2d = useUI((u) => u.on2d)
   const sel = s.furniture.find((f) => f.id === s.selected)
-  const selWall = s.selected?.[0] === 'c' ? s.customWalls.find((w) => w.id === s.selected!.slice(0, -1)) : undefined
   const mode = s.mode
   const touch = isTouch
   const tip = (t: React.ReactNode) => <p className="hint">{t}</p>
@@ -112,35 +111,6 @@ function ModePanel() {
     {!useUI.getState().on2d && !useUI.getState().wallView && <ProjectionSwitch />}
     {tip(<>Drag an item · pink lines = aligned with another item · <kbd>R</kbd> turn · <kbd>X</kbd><kbd>Y</kbd><kbd>Z</kbd> lock axis · <kbd>Ctrl</kbd>+<kbd>D</kbd> copy</>)}
     {sel && <FurnPanel sel={sel} />}
-  </>)
-  if (mode === 'walls') return (<>
-    <div className="seg">
-      <button className={s.tool === 'move' ? 'on' : ''} onClick={() => s.setTool('move')}>Move</button>
-      <button className={s.tool === 'add' ? 'on' : ''} onClick={() => s.setTool('add')}><Icon n="plus" size={14} /> Add wall</button>
-    </div>
-    {s.tool === 'add' && (<>
-      {tip('Click start, then end. Esc cancels.')}
-      <div className="two">
-        <label>Thickness<select value={s.newThick} onChange={(e) => s.setNew({ newThick: +e.target.value })}>{[8, 10, 12, 20].map((t) => <option key={t} value={t}>{t} cm</option>)}</select></label>
-        <label className="check"><input type="checkbox" checked={s.newDoor} onChange={(e) => s.setNew({ newDoor: e.target.checked })} /> doorway</label>
-      </div>
-    </>)}
-    {selWall && (
-      <div className="sel">
-        <b>Added wall</b>
-        <div className="two">
-          <select value={Math.round((selWall.thick / PX_PER_M) * 100)} onChange={(e) => s.patchWall(selWall.id, { thick: (+e.target.value / 100) * PX_PER_M })}>
-            {[8, 10, 12, 20].map((t) => <option key={t} value={t}>{t} cm</option>)}
-          </select>
-          <label className="check"><input type="checkbox" checked={!!selWall.door} onChange={(e) => s.patchWall(selWall.id, { door: e.target.checked })} /> doorway</label>
-        </div>
-        <button className="btn danger" onClick={() => s.removeWall(selWall.id)}><Icon n="trash" size={15} /> Delete wall</button>
-      </div>
-    )}
-    {tip('Outer walls are locked. Drag blue handles, or click any window / door to edit or remove it.')}
-    <SelectedOpeningCard />
-    <OpeningsList />
-    <button className="btn" onClick={s.resetWalls}>Reset walls</button>
   </>)
   // furniture
   const bad = s.furniture.filter((f) => misplaced(f, s.nodes, s.customWalls, s.furniture)).length
@@ -364,7 +334,7 @@ export function Sidebar() {
   )
 }
 
-/** Right-hand panel: only for the edit modes (Walls, Furniture, Move, Rooms, Style, Doors, Sizes). On phones these tools are a tab of the bottom sheet. */
+/** Right-hand panel: only for the edit modes (Openings, Furniture, Move, Rooms, Style, Sizes). On phones these tools are a tab of the bottom sheet. */
 export function ToolPanel() {
   const toolsOpen = useUI((s) => s.toolsOpen)
   const setToolsOpen = useUI((s) => s.setToolsOpen)

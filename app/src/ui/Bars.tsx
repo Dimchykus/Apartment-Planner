@@ -43,12 +43,11 @@ export function ModeBar() {
       { id: 'fly', label: 'Fly', icon: 'fly', active: mode === 'fly', go: set('fly') },
     ] },
     { name: 'Edit', items: [
-      { id: 'walls', label: 'Walls', icon: 'walls', active: mode === 'walls', go: () => { exitLock(); setMode('walls') } },
+      { id: 'openings', label: 'Openings', icon: 'door', active: mode === 'openings', go: () => { exitLock(); setMode('openings') } }, // doors and windows (walls are set in the plan tracer)
       { id: 'furniture', label: 'Furniture', icon: 'box', active: mode === 'furniture', go: () => { exitLock(); setMode('furniture') } },
       { id: 'move', label: 'Move', icon: 'move', active: mode === 'move', go: () => { exitLock(); setMode('move') } },
       { id: 'rooms', label: 'Rooms', icon: 'rooms', active: mode === 'rooms', go: () => { exitLock(); setMode('rooms') } },
       { id: 'style', label: 'Style', icon: 'palette', active: mode === 'style', go: () => { exitLock(); setMode('style') } },
-      { id: 'openings', label: 'Doors', icon: 'door', active: mode === 'openings', go: () => { exitLock(); setMode('openings') } },
       { id: 'dims', label: 'Sizes', icon: 'ruler', active: mode === 'dims', go: () => { exitLock(); setMode('dims') } },
     ] },
   ]

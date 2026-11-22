@@ -8,7 +8,7 @@ export type Pt = [number, number]
 // from/to are px along the wall, measured from node a (or from node b when end === 'b')
 export type Opening = { from: number; to: number; sill: number; top: number; kind: 'window' | 'door'; end?: 'b'; glass?: boolean /* glazed door (french door) */; i?: number /* index in the wall's list (set by openingsOf) */ }
 export type Wall = { id: string; a: string; b: string; thick: number; openings?: Opening[]; door?: boolean; custom?: boolean }
-export type Room = { id: string; name: string; stated: number; nodes: string[]; floor: 'parquet' | 'tile' | 'loggia'; countsFull: boolean; skip?: boolean }
+export type Room = { id: string; name: string; stated: number; nodes: string[]; floor: 'parquet' | 'tile' | 'loggia'; countsFull: boolean; skip?: boolean; src?: string /* id of the tracer room mark it came from: lets a re-traced plan keep the room's function and style */ }
 
 export let initialNodes: Record<string, Pt> = {}
 export let walls: Wall[] = []

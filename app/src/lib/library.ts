@@ -17,7 +17,7 @@ export const ROOM_TYPES: { id: RoomTypeId; label: string; name: string; color: s
 ]
 export const roomType = (id: RoomTypeId) => ROOM_TYPES.find((t) => t.id === id) ?? ROOM_TYPES[0]
 
-export type TraceOpening = { id: string; at: Pt; kind: 'door' | 'window'; width: number; sill?: number; top?: number } // width in metres
+export type TraceOpening = { id: string; at: Pt; kind: 'door' | 'window'; width: number; sill?: number; top?: number; glass?: boolean } // width in metres
 export type TraceRoom = { id: string; at: Pt; type: RoomTypeId; stated?: number }
 export type TraceWall = { id: string; a: string; b: string; thick?: number; divider?: boolean /* only splits a room from another: no wall is built */ } // thick: this wall's own thickness in cm (else the outer / inner default)
 export type TraceState = {
@@ -245,8 +245,8 @@ export function buildFlat(u: Pick<UserFlat, 'id' | 'name' | 'image' | 'imgW' | '
     const from = Math.max(0, best.t * L - half), to = Math.min(L, best.t * L + half)
     if (to - from < 0.25 * pxm) { unplaced++; continue }
     const op: Opening = o.kind === 'door'
-      ? { from, to, sill: 0, top: o.top ?? 2.05, kind: 'door' }
-      : { from, to, sill: o.sill ?? 0.9, top: o.top ?? 2.1, kind: 'window' }
+      ? { from, to, sill: 0, top: o.top ?? 2.05, kind: 'door', ...(o.glass ? { glass: true } : {}) }
+      : { from, to, sill: o.sill ?? 0.9, top: o.top ?? 2.1, kind: 'window', ...(o.glass ? { glass: true } : {}) }
     best.w.openings!.push(op)
   }
   if (unplaced) problems.push(unplaced + ' door/window mark(s) are not on a wall and were ignored.')
@@ -260,7 +260,7 @@ export function buildFlat(u: Pick<UserFlat, 'id' | 'name' | 'image' | 'imgW' | '
     used.add(f)
     const ty = roomType(r.type)
     rooms.push({
-      id: 'r' + (rooms.length + 1), name: ty.name, stated: r.stated && r.stated > 0 ? r.stated : 0, // 0 = the plan prints no figure (nothing to compare with)
+      id: 'r' + (rooms.length + 1), src: r.id, name: ty.name, stated: r.stated && r.stated > 0 ? r.stated : 0, // 0 = the plan prints no figure (nothing to compare with)
       nodes: f.nodes.map((k) => nid[k]),
       floor: r.type === 'bath' ? 'tile' : r.type === 'loggia' ? 'loggia' : 'parquet',
       countsFull: r.type !== 'loggia',
@@ -344,7 +344,7 @@ export function traceFromDef(def: FlatDef, edits: FlatEdits = {}): TraceState {
     for (const o of list) {
       const from = o.end === 'b' ? L - o.to : o.from, to = o.end === 'b' ? L - o.from : o.to
       const m = (from + to) / 2 / L
-      t.openings.push({ id: uid('o'), at: [A[0] + (B[0] - A[0]) * m, A[1] + (B[1] - A[1]) * m], kind: o.kind, width: (to - from) / pxm, sill: o.sill, top: o.top })
+      t.openings.push({ id: uid('o'), at: [A[0] + (B[0] - A[0]) * m, A[1] + (B[1] - A[1]) * m], kind: o.kind, width: (to - from) / pxm, sill: o.sill, top: o.top, ...(o.glass ? { glass: true } : {}) })
     }
   }
   const KIND: Record<string, RoomTypeId> = { open: 'open', living: 'living', kitchen: 'kitchen', bedroom: 'bedroom', bath: 'bath', office: 'office', storage: 'storage' }

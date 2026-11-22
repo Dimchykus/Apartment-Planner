@@ -10,7 +10,7 @@ export function StageBanner() {
   if (s.stage === 'setup') return (
     <div className="warn" style={{ background: 'var(--accent-soft)', borderColor: 'var(--accent)', color: 'var(--text)' }}>
       <b>Step 1 · Set up the flat</b>
-      <small>Check the walls (Walls), windows and doors (Doors) and rooms (Rooms). The furniture tools unlock when you finish.</small>
+      <small>Check the windows and doors (Openings) and the rooms (Rooms). Walls are set in the plan tracer. The furniture tools unlock when you finish.</small>
       <button className="btn primary" onClick={() => s.setStage('design')}><Icon n="check" size={15} /> Finish setup, start furnishing</button>
     </div>
   )
