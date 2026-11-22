@@ -6,6 +6,7 @@ import { rooms as planRooms } from '../plan'
 import { useStore, CATALOG, type Furn } from '../store'
 import { useUI } from './uiStore'
 import { PRESETS, STYLES, FINISHES, sizeOf } from '../catalog'
+import { itemWallDistances } from '../Dims'
 
 export const SWATCHES = ['#e9e5de', '#8d8f93', '#3a3532', '#b08a5a', '#7a5a3a', '#8aa0b5', '#6f8f72', '#b5584a', '#d8d2c6']
 
@@ -133,14 +134,22 @@ export function Slider({ label, v, min, max, on }: { label: string; v: number; m
 
 /** Variant picker for the selected piece of furniture: size preset, style, finish, exact size, colour. */
 export function FurnPanel({ sel }: { sel: Furn }) {
-  const s = useStore()
+  const nodes = useStore((s) => s.nodes)
+  const customWalls = useStore((s) => s.customWalls)
+  const furniture = useStore((s) => s.furniture)
+  const patchFurn = useStore((s) => s.patchFurn)
+  const fitOne = useStore((s) => s.fitOne)
+  const duplicateFurn = useStore((s) => s.duplicateFurn)
+  const removeFurn = useStore((s) => s.removeFurn)
+  const deferredFurn = useDeferredValue(furniture)
+  const deferredSel = useDeferredValue(sel)
   const cat = CATALOG[sel.type]
   const size = sizeOf(sel)
   const presets = PRESETS[sel.type]
   const styles = STYLES[sel.type]
-  const patch = (p: Partial<Furn>) => s.patchFurn(sel.id, p)
+  const patch = (p: Partial<Furn>) => patchFurn(sel.id, p)
   const [fitMsg, setFitMsg] = useState('')
-  const reason = misplacedReason(sel, s.nodes, s.customWalls, s.furniture)
+  const reason = useMemo(() => misplacedReason(deferredSel, nodes, customWalls, deferredFurn), [deferredSel, nodes, customWalls, deferredFurn])
   const cmv = (v: number) => Math.round(v * 100)
   const wide = sel.type === 'kitchen' || sel.type === 'wardrobe'
   const range = (base: number, lo: number, hi: number): [number, number] => [Math.round(Math.max(0.2, base * lo) * 100), Math.round(base * hi * 100)]
@@ -148,12 +157,16 @@ export function FurnPanel({ sel }: { sel: Furn }) {
   const [dMin, dMax] = range(cat.d, 0.5, 2)
   const [hMin, hMax] = range(cat.h, 0.5, 1.6)
   const presetIdx = presets?.findIndex((p) => Math.abs(p.w - size.w) < 0.005 && Math.abs(p.d - size.d) < 0.005 && (p.h === undefined || Math.abs(p.h - size.h) < 0.005)) ?? -1
+  const wallDists = useMemo(() => itemWallDistances(deferredSel, nodes, customWalls), [deferredSel, nodes, customWalls])
   return (
     <div className="sel">
       <b>{cat.label}</b> <small>{cmv(size.w)}×{cmv(size.d)}×{cmv(size.h)} cm</small>
+      {wallDists.length > 0 && (
+        <small>To walls: {wallDists.map((d) => `${d.side} ${cmv(d.dist)}`).join(' · ')} cm</small>
+      )}
       {reason && (
         <div className="warn">⚠ {reason}
-          <button onClick={() => setFitMsg(s.fitOne(sel.id) ? 'Moved / resized to fit.' : "Couldn't find a spot where it fits. Try a smaller size or another room.")}>Fit to space</button>
+          <button onClick={() => setFitMsg(fitOne(sel.id) ? 'Moved to fit.' : "Couldn't fit by nudging. Try moving or resizing it.")}>Fit to space</button>
           {fitMsg && <small>{fitMsg}</small>}
         </div>
       )}
@@ -189,8 +202,8 @@ export function FurnPanel({ sel }: { sel: Furn }) {
       <div>
         <button onClick={() => patch({ rot: sel.rot + Math.PI / 2 })}>Rotate</button>
         <button onClick={() => patch({ w: undefined, d: undefined, h: undefined, style: undefined, finish: undefined, color: undefined })}>Reset</button>
-        <button onClick={() => s.duplicateFurn(sel.id)} title="Ctrl+D">Duplicate</button>
-        <button onClick={() => s.removeFurn(sel.id)}>Remove</button>
+        <button onClick={() => duplicateFurn(sel.id)} title="Ctrl+D">Duplicate</button>
+        <button onClick={() => removeFurn(sel.id)}>Remove</button>
       </div>
     </div>
   )

@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { create } from 'zustand'
 import { rooms, walls as baseWalls, constrainNode, snapPoint, PX_PER_M, activateFlat, m, initialNodes, openingsOf, setOpeningOv, type Pt, type Wall, type Opening } from './plan'
 import { FLATS, BUILTIN_IDS } from './flats'
@@ -321,28 +322,32 @@ export const useStore = create<State>((set) => ({
     if (!w) return {}
     const [ax, ay] = s.nodes[w.a], [bx, by] = s.nodes[w.b]
     const dx = mx * PX_PER_M - (ax + bx) / 2, dy = mz * PX_PER_M - (ay + by) / 2
+    if (Math.abs(dx) < 1e-4 && Math.abs(dy) < 1e-4) return {}
     return { nodes: { ...s.nodes, [w.a]: [ax + dx, ay + dy], [w.b]: [bx + dx, by + dy] } }
   }),
-  select: (selected) => set({ selected }),
+  select: (selected) => set((s) => (s.selected === selected ? {} : { selected })),
   axis: 'free',
-  setAxis: (axis) => set({ axis }),
+  setAxis: (axis) => set((s) => (s.axis === axis ? {} : { axis })),
   guide: null,
-  setGuide: (guide) => set({ guide }),
+  setGuide: (guide) => set((s) => (s.guide?.x === guide?.x && s.guide?.z === guide?.z ? {} : { guide })),
   duplicateFurn: (id) => set((s) => { const f = s.furniture.find((q) => q.id === id); if (!f) return {}; const c = { ...f, id: 'f' + Math.random().toString(36).slice(2, 7), x: f.x + 0.35, z: f.z + 0.35, group: undefined }; return { furniture: [...s.furniture, c], selected: c.id } }),
   setDrag: (drag) => set({ drag }),
   moveNode: (id, x, z) => set((s) => {
+    const old = s.nodes[id]
     if (id[0] === 'c') {
       const all = [...baseWalls, ...s.customWalls]
       const p = snapPoint(x * PX_PER_M, z * PX_PER_M, s.nodes, all, [id, id.slice(0, -1)])
+      if (old && Math.abs(p[0] - old[0]) < 1e-4 && Math.abs(p[1] - old[1]) < 1e-4) return {}
       return { nodes: { ...s.nodes, [id]: p } }
     }
     const p = constrainNode(id, x * PX_PER_M, z * PX_PER_M, s.nodes)
-    return p ? { nodes: { ...s.nodes, [id]: p } } : {}
+    if (!p || (old && Math.abs(p[0] - old[0]) < 1e-4 && Math.abs(p[1] - old[1]) < 1e-4)) return {}
+    return { nodes: { ...s.nodes, [id]: p } }
   }),
   // items that belong to a leader (chairs -> table, nightstand -> bed ...) travel with it
   moveFurn: (id, x, z) => set((s) => {
     const f = s.furniture.find((q) => q.id === id)
-    if (!f) return {}
+    if (!f || (Math.abs(x - f.x) < 1e-5 && Math.abs(z - f.z) < 1e-5)) return {}
     const dx = x - f.x, dz = z - f.z
     return { furniture: s.furniture.map((q) => (q.id === id ? { ...q, x, z } : q.group === id ? { ...q, x: q.x + dx, z: q.z + dz } : q)) }
   }),
@@ -436,10 +441,21 @@ useStore.subscribe((s, prev) => {
   useStore.setState((st) => ({ past: [...st.past.slice(-99), snapOf(prev)], future: [] }))
 })
 
-useStore.subscribe((s) => {
+const SAVE_KEYS = ['flatId', 'nodes', 'furniture', 'customWalls', 'roomKinds', 'hintOv', 'criteria', 'openings', 'doorState', 'roomStyle', 'lightOv', 'versions', 'activeVer', 'stage'] as const
+let saveTimer: ReturnType<typeof setTimeout> | undefined
+function flushSave() {
+  clearTimeout(saveTimer)
+  saveTimer = undefined
+  const s = useStore.getState()
   save.flats![s.flatId] = { nodes: s.nodes, furniture: s.furniture, customWalls: s.customWalls, roomKinds: s.roomKinds, hintOv: s.hintOv, criteria: s.criteria, openings: s.openings, doorState: s.doorState, roomStyle: s.roomStyle, lightOv: s.lightOv, versions: s.versions.map((v) => (v.id === s.activeVer ? { ...v, furniture: s.furniture } : v)), activeVer: s.activeVer, stage: s.stage }
   try { localStorage.setItem(KEY, JSON.stringify({ current: s.flatId, flats: save.flats })) } catch { /* ignore */ }
+}
+useStore.subscribe((s, prev) => {
+  if (!SAVE_KEYS.some((k) => s[k] !== prev[k])) return
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(flushSave, 400)
 })
+if (typeof addEventListener === 'function') addEventListener('pagehide', () => { if (saveTimer) flushSave() })
 
 export function shareLink() {
   const { flatId, nodes, furniture, customWalls, roomKinds, hintOv, criteria, openings, doorState, roomStyle, lightOv } = get()
@@ -450,7 +466,9 @@ const get = useStore.getState
 export const getAllWalls = (): Wall[] => [...baseWalls, ...useStore.getState().customWalls]
 export const useAllWalls = (): Wall[] => {
   const c = useStore((s) => s.customWalls)
-  return [...baseWalls, ...c]
+  const flatId = useStore((s) => s.flatId)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => [...baseWalls, ...c], [c, flatId])
 }
 
 /** Forget the saved layout of one flat (used when its geometry was rebuilt or the flat was deleted). */

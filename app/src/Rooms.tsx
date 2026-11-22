@@ -6,6 +6,7 @@ import { useStore } from './store'
 import { defaultKind, explainPin, probePin, type PinProbe } from './autofurnish'
 import { CATALOG } from './catalog'
 import { kindInfo, ZONE_ITEMS } from './roomkinds'
+import { roomSize } from './Dims'
 
 /** "Rooms" mode: coloured, clickable rooms (set their function) and pins for where kitchen / sofa / bed … should go. */
 export function RoomsLayer() {
@@ -47,7 +48,7 @@ export function RoomsLayer() {
             </mesh>
             {on && <Line points={[...poly, poly[0]].map(([x, y]) => [m(x), 0.06, m(y)] as [number, number, number])} color="#111" lineWidth={3} />}
             <Html position={[m(cx), 0.1, m(cy)]} center style={{ pointerEvents: 'none' }}>
-              <div className={'lbl room' + (on ? ' selroom' : '')}>{info.label}<br />{areaM2(poly).toFixed(1)} m²</div>
+              <div className={'lbl room' + (on ? ' selroom' : '')}>{info.label}<br />{roomSize(poly).w.toFixed(2)} × {roomSize(poly).d.toFixed(2)} m · {areaM2(poly).toFixed(1)} m²</div>
             </Html>
           </group>
         )

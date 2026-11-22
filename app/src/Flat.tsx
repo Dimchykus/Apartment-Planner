@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import * as THREE from 'three'
 import type { ThreeEvent } from '@react-three/fiber'
 import { useTexture } from '@react-three/drei'
@@ -34,9 +34,10 @@ function wallBoxes(w: Wall, nodes: Record<string, Pt>): Box[] {
   return out
 }
 
-export function Flat({ ceiling, opacity = 1 }: { ceiling: boolean; opacity?: number }) {
+export const Flat = memo(function Flat({ ceiling, opacity = 1 }: { ceiling: boolean; opacity?: number }) {
   const solid = opacity >= 0.99
   const nodes = useStore((s) => s.nodes)
+  const flatId = useStore((s) => s.flatId)
   const roomStyle = useStore((s) => s.roomStyle)
   const openings = useStore((s) => s.openings)
   const mode = useStore((s) => s.mode)
@@ -45,6 +46,7 @@ export function Flat({ ceiling, opacity = 1 }: { ceiling: boolean; opacity?: num
   const sig = walls.map((w) => w.id + w.thick + (w.door ? 'd' : '')).join()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const boxes = useMemo(() => walls.flatMap((w) => wallBoxes(w, nodes)), [nodes, sig, openings])
+  const roomShapes = useMemo(() => rooms.map((r) => ({ r, shape: new THREE.Shape(insetRoom(r, nodes).map(([x, y]) => new THREE.Vector2(m(x), m(y)))) })), [nodes, flatId])
 
   // which room is on each side of every wall (so each side can have its own colour)
   const sides = useMemo(() => {
@@ -94,8 +96,7 @@ export function Flat({ ceiling, opacity = 1 }: { ceiling: boolean; opacity?: num
         )
       })}
       <Openings />
-      {rooms.map((r) => {
-        const shape = new THREE.Shape(insetRoom(r, nodes).map(([x, y]) => new THREE.Vector2(m(x), m(y))))
+      {roomShapes.map(({ r, shape }) => {
         const id = roomStyle[r.id]?.floor ?? defaultFloor(r.floor)
         return (
           <group key={r.id}>
@@ -114,7 +115,7 @@ export function Flat({ ceiling, opacity = 1 }: { ceiling: boolean; opacity?: num
       })}
     </group>
   )
-}
+})
 
 export function PlanOverlay({ opacity = 0.5 }: { opacity?: number }) {
   const w = flat.imgW, h = flat.imgH

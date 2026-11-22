@@ -12,7 +12,7 @@ const B = ({ p, s, c, r = 0.02, rough = 0.7, metal = 0 }: BProps) => {
   const fin = useContext(FurnFinish)
   const roughness = fin === 'matte' ? Math.max(rough, 0.88) : fin === 'gloss' ? Math.min(rough, 0.18) : fin === 'satin' ? 0.5 : rough
   return (
-  <RoundedBox args={s} radius={Math.min(r, Math.min(...s) / 2.01)} smoothness={3} position={p} castShadow={op >= 0.99} receiveShadow={op >= 0.99}>
+  <RoundedBox args={s} radius={Math.min(r, Math.min(...s) / 2.01)} smoothness={2} position={p} castShadow={op >= 0.99} receiveShadow={op >= 0.99}>
     <meshStandardMaterial color={c} roughness={roughness} metalness={metal} transparent={op < 0.99} opacity={op} depthWrite={op >= 0.99} />
   </RoundedBox>
   )

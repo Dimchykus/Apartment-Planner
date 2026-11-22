@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import * as THREE from 'three'
 import { Line } from '@react-three/drei'
 import { rooms, insetRoom, m, PX_PER_M, CEILING } from './plan'
@@ -31,7 +31,7 @@ function Fixture({ l, on }: { l: Light; on: boolean }) {
 }
 
 /** Ceiling lights (with real light when on), wall switches, and in the 2D view the lighting plan with switch wiring. */
-export function Electrics({ view2d, ceiling2d }: { view2d: boolean; ceiling2d: boolean }) {
+export const Electrics = memo(function Electrics({ view2d, ceiling2d }: { view2d: boolean; ceiling2d: boolean }) {
   const lights = useStore((s) => s.lights)
   const switches = useStore((s) => s.switches)
   const nodes = useStore((s) => s.nodes)
@@ -83,7 +83,7 @@ export function Electrics({ view2d, ceiling2d }: { view2d: boolean; ceiling2d: b
       {view2d && <LightingPlan2D ceiling={ceiling2d} />}
     </group>
   )
-}
+})
 
 /** 2D lighting plan: ceiling light symbols, switches on the walls and thin wires from each switch to the lights it controls. */
 function LightingPlan2D({ ceiling }: { ceiling: boolean }) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { memo, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { Sky, Stars } from '@react-three/drei'
 import { useUI } from './ui/uiStore'
@@ -46,24 +46,25 @@ function grassTexture() {
 }
 
 /** Sun light aimed at the flat so shadows follow the chosen time of day. */
-export function SunLight({ env, cx, cz }: { env: EnvId; cx: number; cz: number }) {
+export const SunLight = memo(function SunLight({ env, cx, cz, quality = 'med' }: { env: EnvId; cx: number; cz: number; quality?: 'low' | 'med' | 'high' }) {
   const e = ENV_SETTINGS[env]
   const ref = useRef<THREE.DirectionalLight>(null)
   const target = useMemo(() => new THREE.Object3D(), [])
   useEffect(() => { target.position.set(cx, 0, cz); target.updateMatrixWorld(); if (ref.current) ref.current.target = target }, [cx, cz, target])
   const d = new THREE.Vector3(...e.sun).normalize().multiplyScalar(28)
+  const sm = quality === 'high' ? 4096 : quality === 'med' ? 2048 : 1024
   return (
     <>
       <primitive object={target} />
       <directionalLight ref={ref} castShadow position={[cx + d.x, Math.max(d.y, 2.5), cz + d.z]} intensity={e.sunI} color={e.sunColor}
-        shadow-mapSize={[4096, 4096]} shadow-bias={-0.0004}
+        shadow-mapSize={[sm, sm]} shadow-bias={-0.0004}
         shadow-camera-left={-14} shadow-camera-right={14} shadow-camera-top={14} shadow-camera-bottom={-14} shadow-camera-far={90} />
     </>
   )
-}
+})
 
 /** Sky, street level, neighbouring buildings, trees; warm room lights at night. */
-export function Outside({ env, cx, cz, fw, fh }: { env: EnvId; cx: number; cz: number; fw: number; fh: number }) {
+export const Outside = memo(function Outside({ env, cx, cz, fw, fh }: { env: EnvId; cx: number; cz: number; fw: number; fh: number }) {
   const e = ENV_SETTINGS[env]
   const grass = useMemo(grassTexture, [])
   const night = env === 'night'
@@ -111,7 +112,7 @@ export function Outside({ env, cx, cz, fw, fh }: { env: EnvId; cx: number; cz: n
         <meshStandardMaterial color="#cfc8bb" roughness={0.9} />
       </mesh>
       {buildings.map((b, i) => (
-        <mesh key={i} position={[b.x, GROUND + b.h / 2, b.z]} castShadow receiveShadow>
+        <mesh key={i} position={[b.x, GROUND + b.h / 2, b.z]}>
           <boxGeometry args={[b.w, b.h, b.d]} />
           <meshStandardMaterial color={b.tint} map={b.tex} roughness={0.85}
             emissive="#ffffff" emissiveMap={b.lit} emissiveIntensity={night ? 1.4 : env === 'sunset' ? 0.4 : 0} />
@@ -119,11 +120,11 @@ export function Outside({ env, cx, cz, fw, fh }: { env: EnvId; cx: number; cz: n
       ))}
       {trees.map((t, i) => (
         <group key={i} position={[t.x, GROUND, t.z]} scale={t.s}>
-          <mesh position={[0, 1.2, 0]} castShadow><cylinderGeometry args={[0.18, 0.26, 2.4, 8]} /><meshStandardMaterial color="#5b4630" roughness={1} /></mesh>
-          <mesh position={[0, 4.2, 0]} castShadow><icosahedronGeometry args={[2.1, 1]} /><meshStandardMaterial color={t.t < 0.5 ? '#4d7a3c' : '#5f8a45'} roughness={1} flatShading /></mesh>
-          <mesh position={[0.4, 5.6, 0.2]} castShadow><icosahedronGeometry args={[1.4, 1]} /><meshStandardMaterial color="#5a8742" roughness={1} flatShading /></mesh>
+          <mesh position={[0, 1.2, 0]}><cylinderGeometry args={[0.18, 0.26, 2.4, 8]} /><meshStandardMaterial color="#5b4630" roughness={1} /></mesh>
+          <mesh position={[0, 4.2, 0]}><icosahedronGeometry args={[2.1, 1]} /><meshStandardMaterial color={t.t < 0.5 ? '#4d7a3c' : '#5f8a45'} roughness={1} flatShading /></mesh>
+          <mesh position={[0.4, 5.6, 0.2]}><icosahedronGeometry args={[1.4, 1]} /><meshStandardMaterial color={t.t < 0.5 ? '#5a8742' : '#5a8742'} roughness={1} flatShading /></mesh>
         </group>
       ))}
     </group>
   )
-}
+})
