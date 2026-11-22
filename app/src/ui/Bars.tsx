@@ -51,7 +51,7 @@ export function ModeBar() {
       {groups.map((g) => (
         <div key={g.name} className="mgroup">
           {g.items.map((i) => (
-            <button key={i.id} className={'mbtn' + (i.active ? ' on' : '')} onClick={i.go} title={i.label} aria-pressed={i.active}>
+            <button key={i.id} className={'mbtn' + (i.active ? ' on' : '')} onClick={i.go} disabled={s.stage === 'setup' && ['furniture', 'move'].includes(i.id)} title={s.stage === 'setup' && ['furniture', 'move'].includes(i.id) ? 'Finish the flat setup first' : i.label} aria-pressed={i.active}>
               <Icon n={i.icon} size={19} /><span>{i.label}</span>
             </button>
           ))}

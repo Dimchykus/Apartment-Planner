@@ -11,6 +11,7 @@ import { CriteriaPanel, SpaceSummary, RoomsPanel, FurnPanel } from './Panels'
 import { StylePanel, OpeningsPanel, DoorLightControls } from './StylePanels'
 import { AiPanel } from './AiPanel'
 import { useAI } from '../ai/aiStore'
+import { StageBanner, VersionsPanel } from './VersionsCard'
 import { startCarry } from '../Editor'
 import { describeRooms } from '../autofurnish'
 import { duplicateFlat, deleteUserFlat, exportFlat, importFlatFile, exportProject, importProject, renameUserFlat, isUserFlat } from '../lib/libraryActions'
@@ -247,6 +248,8 @@ function GeneralCards() {
   const s = useStore()
   const editing = EDIT_MODES.includes(s.mode)
   return (<>
+    <StageBanner />
+    <Card id="versions" title="Furniture layouts" icon="layers" badge={<em className="pill">{s.versions.length}</em>}><VersionsPanel /></Card>
     {!editing && <Card id="controls" title="How to move around" icon="orbit"><ModePanel /></Card>}
     <Card id="overview" title="Overview" icon="home"><Overview /></Card>
     <Card id="scene" title="Scene & view" icon="sun" dflt={false}><Scene /></Card>

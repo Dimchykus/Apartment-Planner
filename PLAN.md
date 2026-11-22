@@ -93,3 +93,8 @@ App lives in `app/`. Run: `cd app && npm run dev` → http://localhost:5173
 ## Phase 11 — Move tools and shorter tool panels (done)
 - [x] Move mode: axis lock Free / X / Y / Z (height) with buttons or keys X, Y, Z; pick up with Enter, click or Enter drops, Esc puts it back; pink alignment guides to other items' edges / centres (6 cm); Align: 3D | 2D plan | Wall (elevation view of any wall, slide along the wall and set hanging height); Duplicate (Ctrl+D)
 - [x] Right-panel texts cut to one short line per mode
+
+## Phase 12 — Setup flow + furniture layouts (done)
+- [x] New flats start in "Setup" (walls, windows & doors, rooms); Furniture / Move are locked until "Finish setup"; "Edit flat setup" reopens it. Example flats start in design stage
+- [x] Furniture layouts (versions) per flat: copy / empty / rename / delete / switch; the active one saves automatically; an AI variant can be kept as a layout. Walls, windows, rooms, styles are shared by all layouts
+- [ ] Not yet: custom room names, layouts for the lights, comparing two layouts side by side

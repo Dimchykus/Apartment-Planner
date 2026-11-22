@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { rooms, walls as baseWalls, constrainNode, snapPoint, PX_PER_M, activateFlat, m, initialNodes, openingsOf, setOpeningOv, type Pt, type Wall, type Opening } from './plan'
-import { FLATS } from './flats'
+import { FLATS, BUILTIN_IDS } from './flats'
 import { autoFurnish, inRoom, fitFurn, misplaced, misplacedReason, allowedKinds, type RoomKind } from './autofurnish'
 import { DEFAULT_CRITERIA, type Criteria } from './criteria'
 import { CATALOG, type FType, type Furn } from './catalog'
@@ -21,7 +21,17 @@ const f = (id: string, type: FType, x: number, z: number, rot = 0): Furn => ({ i
 /** Everything Ctrl+Z can bring back. */
 export type Snap = { nodes: Record<string, Pt>; customWalls: Wall[]; furniture: Furn[]; roomKinds: Record<string, RoomKind>; hintOv: Partial<Record<FType, Pt>>; criteria: Criteria; openings: Record<string, Opening[]>; doorState: Record<string, DoorSt>; roomStyle: Record<string, RoomStyle> }
 
+export type Ver = { id: string; name: string; furniture: Furn[]; created: number }
 type State = {
+  versions: Ver[]                       // furniture layouts of this flat; the setup (walls, windows, rooms) is shared by all of them
+  activeVer: string
+  stage: 'setup' | 'design'             // setup = walls / windows / rooms, design = furniture
+  setStage: (s: 'setup' | 'design') => void
+  addVersion: (name?: string, from?: 'empty' | 'copy') => void
+  switchVersion: (id: string) => void
+  renameVersion: (id: string, name: string) => void
+  deleteVersion: (id: string) => void
+  saveAsVersion: (furniture: Furn[], name: string) => void
   openings: Record<string, Opening[]>            // openings the user changed, per wall id
   doorState: Record<string, DoorSt>              // key: wallId:index
   roomStyle: Record<string, RoomStyle>           // per room id; 'outside' = exterior walls
@@ -106,7 +116,7 @@ type State = {
 }
 
 const KEY = 'planner-v2'
-type FlatSave = { nodes?: Record<string, Pt>; furniture?: Furn[]; customWalls?: Wall[]; roomKinds?: Record<string, RoomKind>; hintOv?: Partial<Record<FType, Pt>>; criteria?: Criteria; openings?: Record<string, Opening[]>; doorState?: Record<string, DoorSt>; roomStyle?: Record<string, RoomStyle>; lightOv?: Record<string, boolean> }
+type FlatSave = { nodes?: Record<string, Pt>; furniture?: Furn[]; customWalls?: Wall[]; roomKinds?: Record<string, RoomKind>; hintOv?: Partial<Record<FType, Pt>>; criteria?: Criteria; openings?: Record<string, Opening[]>; doorState?: Record<string, DoorSt>; roomStyle?: Record<string, RoomStyle>; lightOv?: Record<string, boolean>; versions?: Ver[]; activeVer?: string; stage?: 'setup' | 'design' }
 type Save = { current?: string; flats?: Record<string, FlatSave> }
 
 function loadSave(): Save {
@@ -136,12 +146,21 @@ function flatState(id: string) {
   setOpeningOv(openings) // before furnishing: furniture keeps clear of the (edited) windows and doors
   const furniture = sv.furniture ?? autoFurnish(nodes, customWalls, { kinds: roomKinds, hints: hintOv, criteria })
   const el = autoElectrics(nodes, customWalls, furniture, roomKinds, (k) => doorState[k] ?? {})
-  return { flatId: def.id, nodes, customWalls, roomKinds, hintOv, criteria, furniture, openings, doorState, roomStyle, lightOv, lights: el.lights, switches: el.switches, selOpening: null as { wall: string; i: number } | null }
+  const versions: Ver[] = sv.versions?.length ? sv.versions : [{ id: 'v1', name: 'Layout 1', furniture, created: Date.now() }]
+  const activeVer = sv.activeVer && versions.some((v) => v.id === sv.activeVer) ? sv.activeVer : versions[0].id
+  const stage = sv.stage ?? (BUILTIN_IDS.has(def.id) ? 'design' : 'setup')
+  return { versions, activeVer, stage, flatId: def.id, nodes, customWalls, roomKinds, hintOv, criteria, furniture, openings, doorState, roomStyle, lightOv, lights: el.lights, switches: el.switches, selOpening: null as { wall: string; i: number } | null }
 }
 const start = flatState(save.current ?? FLATS[0].id)
 
 export const useStore = create<State>((set) => ({
   ...start,
+  setStage: (stage) => set({ stage }),
+  addVersion: (name, from = 'copy') => set((s) => { const id = 'v' + Math.random().toString(36).slice(2, 6); const v: Ver = { id, name: name ?? 'Layout ' + (s.versions.length + 1), furniture: from === 'copy' ? s.furniture.map((f) => ({ ...f })) : [], created: Date.now() }; return { versions: [...s.versions.map((q) => (q.id === s.activeVer ? { ...q, furniture: s.furniture } : q)), v], activeVer: id, furniture: v.furniture, selected: null } }),
+  switchVersion: (id) => set((s) => { const t = s.versions.find((v) => v.id === id); if (!t || id === s.activeVer) return {}; return { versions: s.versions.map((q) => (q.id === s.activeVer ? { ...q, furniture: s.furniture } : q)), activeVer: id, furniture: t.furniture.map((f) => ({ ...f })), selected: null } }),
+  renameVersion: (id, name) => set((s) => ({ versions: s.versions.map((v) => (v.id === id ? { ...v, name } : v)) })),
+  deleteVersion: (id) => set((s) => { if (s.versions.length < 2) return {}; const rest = s.versions.filter((v) => v.id !== id); if (id !== s.activeVer) return { versions: rest }; return { versions: rest, activeVer: rest[0].id, furniture: rest[0].furniture.map((f) => ({ ...f })), selected: null } }),
+  saveAsVersion: (furniture, name) => set((s) => { const id = 'v' + Math.random().toString(36).slice(2, 6); return { versions: [...s.versions.map((q) => (q.id === s.activeVer ? { ...q, furniture: s.furniture } : q)), { id, name, furniture: furniture.map((f) => ({ ...f })), created: Date.now() }], activeVer: id, furniture: furniture.map((f) => ({ ...f })), selected: null } }),
   openingTool: 'select',
   openingPreset: 'window',
   setDoor: (key, p) => set((s) => ({ doorState: { ...s.doorState, [key]: { ...(s.doorState[key] ?? { state: 1 as const }), ...p } } })),
@@ -221,7 +240,7 @@ export const useStore = create<State>((set) => ({
   },
   switchFlat: (id) => {
     const s0 = useStore.getState()
-    if (s0.flatId !== id) save.flats![s0.flatId] = { nodes: s0.nodes, furniture: s0.furniture, customWalls: s0.customWalls, roomKinds: s0.roomKinds, hintOv: s0.hintOv, criteria: s0.criteria, openings: s0.openings, doorState: s0.doorState, roomStyle: s0.roomStyle, lightOv: s0.lightOv }
+    if (s0.flatId !== id) save.flats![s0.flatId] = { nodes: s0.nodes, furniture: s0.furniture, customWalls: s0.customWalls, roomKinds: s0.roomKinds, hintOv: s0.hintOv, criteria: s0.criteria, openings: s0.openings, doorState: s0.doorState, roomStyle: s0.roomStyle, lightOv: s0.lightOv, versions: s0.versions.map((v) => (v.id === s0.activeVer ? { ...v, furniture: s0.furniture } : v)), activeVer: s0.activeVer, stage: s0.stage }
     set({ ...flatState(id), past: [], future: [], mode: 'view', selected: null, selRoom: null, placing: null, tool: 'move', drawStart: null, drag: null })
   },
   selRoom: null,
@@ -418,7 +437,7 @@ useStore.subscribe((s, prev) => {
 })
 
 useStore.subscribe((s) => {
-  save.flats![s.flatId] = { nodes: s.nodes, furniture: s.furniture, customWalls: s.customWalls, roomKinds: s.roomKinds, hintOv: s.hintOv, criteria: s.criteria, openings: s.openings, doorState: s.doorState, roomStyle: s.roomStyle, lightOv: s.lightOv }
+  save.flats![s.flatId] = { nodes: s.nodes, furniture: s.furniture, customWalls: s.customWalls, roomKinds: s.roomKinds, hintOv: s.hintOv, criteria: s.criteria, openings: s.openings, doorState: s.doorState, roomStyle: s.roomStyle, lightOv: s.lightOv, versions: s.versions.map((v) => (v.id === s.activeVer ? { ...v, furniture: s.furniture } : v)), activeVer: s.activeVer, stage: s.stage }
   try { localStorage.setItem(KEY, JSON.stringify({ current: s.flatId, flats: save.flats })) } catch { /* ignore */ }
 })
 
