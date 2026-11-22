@@ -255,7 +255,9 @@ export const useStore = create<State>((set) => ({
   switchFlat: (id) => {
     const s0 = useStore.getState()
     if (s0.flatId !== id) save.flats![s0.flatId] = { nodes: s0.nodes, furniture: s0.furniture, customWalls: s0.customWalls, roomKinds: s0.roomKinds, hintOv: s0.hintOv, criteria: s0.criteria, openings: s0.openings, doorState: s0.doorState, roomStyle: s0.roomStyle, lightOv: s0.lightOv, versions: s0.versions.map((v) => (v.id === s0.activeVer ? { ...v, furniture: s0.furniture } : v)), activeVer: s0.activeVer, stage: s0.stage }
-    set({ ...flatState(id), past: [], future: [], mode: 'view', selected: null, selRoom: null, placing: null, tool: 'move', drawStart: null, drag: null })
+    applying = true
+    set({ ...flatState(id), past: [], future: [], mode: 'view', selected: null, selOpening: null, selRoom: null, placing: null, tool: 'move', drawStart: null, drag: null, guide: null })
+    applying = false; lastPush = 0; lastPushKey = ''; dragPending = false
   },
   selRoom: null,
   notice: null,
@@ -463,20 +465,20 @@ useStore.subscribe((s, prev) => {
   const changed = SNAP_KEYS.filter((k) => s[k] !== prev[k])
   if (!changed.length) return
   const key = changed.length === 1 ? changed[0] : ''
+  const mergeFurn = key === 'furniture' && s.furniture.length === prev.furniture.length
+  const mergeOpen = key === 'openings' && Object.values(s.openings).reduce((a, b) => a + b.length, 0) === Object.values(prev.openings).reduce((a, b) => a + b.length, 0)
   if (s.drag) {
     if (!dragPending) return
     dragPending = false
   } else {
     const now = Date.now()
-    const mergeFurn = key === 'furniture' && s.furniture.length === prev.furniture.length
-    const mergeOpen = key === 'openings' && Object.values(s.openings).reduce((a, b) => a + b.length, 0) === Object.values(prev.openings).reduce((a, b) => a + b.length, 0)
     if ((mergeFurn || mergeOpen) && lastPushKey === key && now - lastPush < 400) {
       lastPush = now
       return
     }
   }
   lastPush = Date.now()
-  lastPushKey = s.drag ? '' : key
+  lastPushKey = !s.drag && (mergeFurn || mergeOpen) ? key : ''
   applying = true
   useStore.setState((st) => ({ past: [...st.past.slice(-99), snapOf(prev)], future: [] }))
   applying = false

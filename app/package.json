@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "test": "node scripts/test-unit.mjs",
+    "test:e2e": "node scripts/e2e-undo.mjs",
     "build:single": "tsc -b && vite build -c vite.single.config.ts",
     "package": "node scripts/package.mjs"
   },
